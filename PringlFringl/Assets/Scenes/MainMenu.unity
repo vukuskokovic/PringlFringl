@@ -123,6 +123,17 @@ NavMeshSettings:
     debug:
       m_Flags: 0
   m_NavMeshData: {fileID: 0}
+--- !u!114 &427070293 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 6499930341165503089, guid: e9f2809267692c34cb19e299302d3363, type: 3}
+  m_PrefabInstance: {fileID: 1501903642}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4e29b1a8efbd4b44bb3f3716e73f07ff, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
 --- !u!1001 &574060574
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -417,6 +428,17 @@ Transform:
   m_Father: {fileID: 0}
   m_RootOrder: 0
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1016318015 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 6499930341165503089, guid: e9f2809267692c34cb19e299302d3363, type: 3}
+  m_PrefabInstance: {fileID: 574060574}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4e29b1a8efbd4b44bb3f3716e73f07ff, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
 --- !u!1001 &1501903642
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -650,9 +672,11 @@ MonoBehaviour:
   m_GameObject: {fileID: 1653454375}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 37f79d301ae3a3341946995b091f080c, type: 3}
+  m_Script: {fileID: 11500000, guid: ca1d55ee8b0b05a40a4423f1bb268fa0, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  JoinRoomButton: {fileID: 1016318015}
+  CreateRoomButton: {fileID: 427070293}
 --- !u!1 &1812509629
 GameObject:
   m_ObjectHideFlags: 0
