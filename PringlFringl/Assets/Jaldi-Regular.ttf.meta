@@ -1,5 +1,5 @@
 fileFormatVersion: 2
-guid: b6b0410655fe20a4aa75b646d269822b
+guid: d2123c213c3566940a9d4e4405363276
 TrueTypeFontImporter:
   externalObjects: {}
   serializedVersion: 4
@@ -9,7 +9,7 @@ TrueTypeFontImporter:
   characterPadding: 1
   includeFontData: 1
   fontNames:
-  - Acme
+  - Jaldi
   fallbackFontReferences: []
   customCharacters: 
   fontRenderingMode: 0
