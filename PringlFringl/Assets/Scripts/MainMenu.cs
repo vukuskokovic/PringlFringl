@@ -9,8 +9,10 @@ using static Networking;
 public class MainMenu : MonoBehaviour
 {
     public Button CreateRoomButton, JoinRoomButton;
+    public InputField IPField;
     void Start()
     {
+        IPField.text = "192.168.0.17";
         CreateRoomButton.onClick.AddListener(() => 
         {
             IPEndPoint point = new IPEndPoint(GetLocalIP(), 1420);
@@ -22,7 +24,7 @@ public class MainMenu : MonoBehaviour
         });
         JoinRoomButton.onClick.AddListener(() => 
         {
-            IPEndPoint point = new IPEndPoint(GetLocalIP(), 1420);
+            IPEndPoint point = new IPEndPoint(IPAddress.Parse(IPField.text), 1420);
             udpSocket.Client.Bind(new IPEndPoint(GetLocalIP(), 0));
             string username = "NIGGERS";
             byte[] sendBuffer = EncodeString(username);

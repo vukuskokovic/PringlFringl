@@ -43,13 +43,6 @@ public static class Networking
     {
         return JsonConvert.DeserializeObject<T>(DecodeString(buffer, receved));
     }
-
-    public static void WriteVec3(ref BinaryWriter wr, Vector3 pos)
-    {
-        wr.Write(pos.x);
-        wr.Write(pos.y);
-        wr.Write(pos.z);
-    }
     public static Vector3 ReadVector3(ref BinaryReader reader)
     {
         return new Vector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());

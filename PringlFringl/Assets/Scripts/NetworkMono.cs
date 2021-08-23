@@ -4,6 +4,7 @@ using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
+using System.Linq;
 using UnityEngine;
 using System.Collections.Generic;
 using static Networking;
@@ -18,6 +19,7 @@ namespace Assets.Scripts
         public int Ticks;
         private float Timer = 0.0f;
         private int addId = -1;
+        private Queue<NetworkingPlayer> PlayersToSpawn = new Queue<NetworkingPlayer>();
         private bool Connected = true;
         void Start()
         {
@@ -39,61 +41,24 @@ namespace Assets.Scripts
             }
             new Thread(UDPThread).Start();
         }
-
         private void OnApplicationQuit()
         {
             Connected = false;
         }
-
-        GameObject InitPlayerEntity()
-        {
-            GameObject obj = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            var body = obj.AddComponent<Rigidbody>();
-            body.freezeRotation = true;
-            body.constraints = RigidbodyConstraints.FreezePosition;
-            return obj;
-        }
-
-        void SpawnPlayer(NetworkingPlayer player)
-        {
-            int spawnId = new System.Random().Next(0, PlayerSpawns.Count);
-            Transform t = PlayerSpawns[spawnId];
-            if(player.socket != null)
-            {
-                TcpIO.LWrite();
-                TcpIO.Writer.Write((byte)TCPMessageType.SetPosition);
-                TcpIO.Writer.Write(t.position.x);
-                TcpIO.Writer.Write(t.position.y);
-                TcpIO.Writer.Write(t.position.z);
-                player.socket.Send(TcpIO.WriteStream.ToArray());
-                TcpIO.WDispose();
-            }
-            else
-                LocalPlayer.transform.position = t.position;
-        }
-
-        // Update is called once per frame
         void Update()
         {
             Timer += Time.deltaTime;
-            if (Timer >= 1.0f / Ticks)
-            {
-                Timer = 0f;
-                UpdatePos();
-            }
             if(addId != -1)
             {
                 Players.Find(x => x.id == addId).Entity = InitPlayerEntity();
                 addId = -1;
             }
-            foreach(NetworkingPlayer player in Players)
+            while (PlayersToSpawn.Count != 0) SpawnPlayer(PlayersToSpawn.Dequeue());
+            foreach (NetworkingPlayer player in Players.Where(x => x.updateAvalible && (!Host || x.socket != null)))
             {
-                if (player.updateAvalible)
-                {
-                    player.updateAvalible = false;
-                    player.Entity.transform.position = player.updatePos;
-                    player.Entity.transform.eulerAngles = player.updateRot;
-                }
+                player.updateAvalible = false;
+                player.Entity.transform.position = player.updatePos;
+                player.Entity.transform.eulerAngles = player.updateRot;
             }
             if(!Host && tcpSocket.Available > 0) 
             {
@@ -116,6 +81,38 @@ namespace Assets.Scripts
 
                 TcpIO.RDispose();
             }
+            if (Timer >= 1.0f / Ticks)
+            {
+                Timer = 0f;
+                UpdatePos();
+            }
+        }
+
+        GameObject InitPlayerEntity()
+        {
+            GameObject obj = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            var body = obj.AddComponent<Rigidbody>();
+            body.freezeRotation = true;
+            body.constraints = RigidbodyConstraints.FreezePosition;
+            return obj;
+        }
+
+        void SpawnPlayer(NetworkingPlayer player)
+        {
+            int spawnId = new System.Random().Next(0, PlayerSpawns.Count);
+            Transform t = PlayerSpawns[spawnId];
+            if (player.socket != null)
+            {
+                TcpIO.LWrite();
+                TcpIO.Writer.Write((byte)TCPMessageType.SetPosition);
+                TcpIO.Writer.Write(t.position.x);
+                TcpIO.Writer.Write(t.position.y);
+                TcpIO.Writer.Write(t.position.z);
+                player.socket.Send(TcpIO.WriteStream.ToArray());
+                TcpIO.WDispose();
+            }
+            else
+                LocalPlayer.transform.position = t.position;
         }
 
         void UpdatePos()
@@ -127,11 +124,8 @@ namespace Assets.Scripts
                 UdpIO.Writer.Write((byte)UDPMessageType.UpdatePos);
                 NetworkingPlayer[] players = Players.ToArray();
                 for (int i = 0; i < players.Length; i++)
-                {
-                    UdpIO.Writer.Write(players[i].id);
-                    WriteVec3(ref UdpIO.Writer, players[i].Entity.transform.position);
-                    WriteVec3(ref UdpIO.Writer, players[i].Entity.transform.eulerAngles);
-                }
+                    UdpIO.WriteTransform(players[i].id, players[i].Entity.transform.position, players[i].Entity.transform.eulerAngles);
+                
                 byte[] buffer = UdpIO.WriteStream.ToArray();
                 for (int i = 0; i < players.Length; i++)
                     if(players[i].socket != null && players[i].listenPoint != null)
@@ -141,9 +135,7 @@ namespace Assets.Scripts
             else
             {
                 UdpIO.Writer.Write((byte)UDPMessageType.UpdatePos);
-                UdpIO.Writer.Write(id);
-                WriteVec3(ref UdpIO.Writer, LocalPlayer.transform.position);
-                WriteVec3(ref UdpIO.Writer, LocalPlayer.transform.eulerAngles);
+                UdpIO.WriteTransform(id, LocalPlayer.transform.position, LocalPlayer.transform.eulerAngles);
                 byte[] buffer = UdpIO.WriteStream.ToArray();
                 udpSocket.Send(buffer, buffer.Length, serverPoint);
             }
@@ -167,27 +159,32 @@ namespace Assets.Scripts
             while (Connected)
             {
                 Socket socket = tcpSocket.Accept();
-                byte[] buffer = new byte[12];
+                byte[] buffer = new byte[20];
                 int rec = socket.Receive(buffer);
                 string username = DecodeString(buffer, rec);
+
                 int assignedId = 0;
                 System.Random r = new System.Random();
                 assignedId = r.Next(0, 100);
                 while (Players.Exists(x => x.id == assignedId)) assignedId = r.Next(0, 100);
+
                 JoinResponse response = new JoinResponse() { 
                     id = (byte)assignedId,
                     Players = Players
                 };
                 byte[] sendBuffer = EncodeJson(response);
                 socket.Send(sendBuffer);
+
                 SendJoinMessage(username, assignedId);
-                Players.Add(new NetworkingPlayer() { 
+                NetworkingPlayer player = new NetworkingPlayer()
+                {
                     id = (byte)assignedId,
                     username = username,
                     socket = socket
-                });
+                };
+                Players.Add(player);
+                PlayersToSpawn.Enqueue(player);
                 addId = assignedId;
-                SpawnPlayer(Players[assignedId]);
             }
         }
         private void UDPThread()
@@ -207,7 +204,6 @@ namespace Assets.Scripts
                     }
                     else if (type == UDPMessageType.UpdatePos)
                         ReadPlayerPos();
-                    
                 }
                 else
                 {

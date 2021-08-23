@@ -70,4 +70,15 @@ public class ProtocolIO
         WriteStream.Dispose();
         Writer.Dispose();
     }
+
+    public void WriteTransform(byte id, Vector3 pos, Vector3 rot)
+    {
+        Writer.Write(id);
+        Writer.Write(pos.x);
+        Writer.Write(pos.y);
+        Writer.Write(pos.z);
+        Writer.Write(rot.x);
+        Writer.Write(rot.y);
+        Writer.Write(rot.z);
+    }
 }
