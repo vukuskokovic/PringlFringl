@@ -37,7 +37,7 @@ public class PlayerMovement : MonoBehaviour
             if (Input.GetKey(KeyCode.D)) position += transform.right;
             if (Input.GetKey(KeyCode.Space) && !InJump && PlayerRigidBody.velocity.y == 0)
             {
-                PlayerRigidBody.AddForce(Vector3.up * 200);
+                PlayerRigidBody.AddForce(Vector3.up * 250);
                 InJump = true;
             }
             position *= SpeedAdd;

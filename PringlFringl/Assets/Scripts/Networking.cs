@@ -3,15 +3,17 @@ using System.Net;
 using Newtonsoft.Json;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using UnityEngine;
 
 public static class Networking 
 {
     public static UdpClient udpSocket = new UdpClient();
     public static Socket tcpSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-    public static List<NetworkingPlayer> Players = new List<NetworkingPlayer>();
+    public static Dictionary<byte, NetworkingPlayer> Players = new Dictionary<byte, NetworkingPlayer>();
     public static IPEndPoint serverPoint;
     public static byte id;
+    public static string name;
     public static bool Host = false;
 
     private static MemoryStream stream;
@@ -56,7 +58,7 @@ public static class Networking
         writer.Write((byte)id);
         writer.Write(username);
         byte[] buff = stream.ToArray();
-        NetworkingPlayer[] players = Players.ToArray();
+        NetworkingPlayer[] players = Players.Values.ToArray();
         for(int i = 0; i < players.Length; i++)
             if (players[i].socket != null)
                 players[i].socket.Send(buff);

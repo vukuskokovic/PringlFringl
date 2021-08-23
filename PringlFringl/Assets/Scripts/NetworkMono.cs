@@ -18,14 +18,14 @@ namespace Assets.Scripts
         private ProtocolIO UdpIO = new ProtocolIO(), TcpIO = new ProtocolIO();
         public int Ticks;
         private float Timer = 0.0f;
-        private int addId = -1;
+        private Queue<byte> PlayersToAdd = new Queue<byte>();
         private Queue<NetworkingPlayer> PlayersToSpawn = new Queue<NetworkingPlayer>();
         private bool Connected = true;
         void Start()
         {
             if (Host) 
             {
-                Players.Add(new NetworkingPlayer() { 
+                Players.Add(0, new NetworkingPlayer() { 
                     Entity = LocalPlayer,
                     id = 0,
                     username = "SERVERF"
@@ -35,7 +35,7 @@ namespace Assets.Scripts
             }
             else 
             {
-                foreach(NetworkingPlayer player in Players)
+                foreach(NetworkingPlayer player in Players.Values)
                     player.Entity = InitPlayerEntity();
                 
             }
@@ -48,17 +48,13 @@ namespace Assets.Scripts
         void Update()
         {
             Timer += Time.deltaTime;
-            if(addId != -1)
-            {
-                Players.Find(x => x.id == addId).Entity = InitPlayerEntity();
-                addId = -1;
-            }
+            while(PlayersToAdd.Count != 0) Players[PlayersToAdd.Dequeue()].Entity = InitPlayerEntity();
             while (PlayersToSpawn.Count != 0) SpawnPlayer(PlayersToSpawn.Dequeue());
-            foreach (NetworkingPlayer player in Players.Where(x => x.updateAvalible && (!Host || x.socket != null)))
+            foreach (KeyValuePair<byte, NetworkingPlayer> player in Players.Where(x => x.Value.updateAvalible && (!Host || x.Value.socket != null)))
             {
-                player.updateAvalible = false;
-                player.Entity.transform.position = player.updatePos;
-                player.Entity.transform.eulerAngles = player.updateRot;
+                player.Value.updateAvalible = false;
+                player.Value.Entity.transform.position = player.Value.updatePos;
+                player.Value.Entity.transform.eulerAngles = player.Value.updateRot;
             }
             if(!Host && tcpSocket.Available > 0) 
             {
@@ -70,7 +66,7 @@ namespace Assets.Scripts
                 {
                     byte playerId = TcpIO.Reader.ReadByte();
                     string username = TcpIO.Reader.ReadString();
-                    Players.Add(new NetworkingPlayer() { 
+                    Players.Add(playerId, new NetworkingPlayer() { 
                         Entity = InitPlayerEntity(),
                         id = playerId,
                         username = username
@@ -81,6 +77,7 @@ namespace Assets.Scripts
 
                 TcpIO.RDispose();
             }
+
             if (Timer >= 1.0f / Ticks)
             {
                 Timer = 0f;
@@ -122,7 +119,7 @@ namespace Assets.Scripts
             if (Host) 
             {
                 UdpIO.Writer.Write((byte)UDPMessageType.UpdatePos);
-                NetworkingPlayer[] players = Players.ToArray();
+                NetworkingPlayer[] players = Players.Values.ToArray();
                 for (int i = 0; i < players.Length; i++)
                     UdpIO.WriteTransform(players[i].id, players[i].Entity.transform.position, players[i].Entity.transform.eulerAngles);
                 
@@ -144,11 +141,11 @@ namespace Assets.Scripts
 
         void ReadPlayerPos()
         {
-            byte id = UdpIO.Reader.ReadByte();
+            byte playerId = UdpIO.Reader.ReadByte();
             Vector3 pos = ReadVector3(ref UdpIO.Reader);
             Vector3 rot = ReadVector3(ref UdpIO.Reader);
-            if (id == Networking.id) return;
-            NetworkingPlayer player = Players.Find(x => x.id == id);
+            if (playerId == id) return;
+            NetworkingPlayer player = Players[playerId];
             player.updatePos = pos;
             player.updateRot = rot;
             player.updateAvalible = true;
@@ -162,15 +159,14 @@ namespace Assets.Scripts
                 byte[] buffer = new byte[20];
                 int rec = socket.Receive(buffer);
                 string username = DecodeString(buffer, rec);
-
                 int assignedId = 0;
                 System.Random r = new System.Random();
                 assignedId = r.Next(0, 100);
-                while (Players.Exists(x => x.id == assignedId)) assignedId = r.Next(0, 100);
+                while (Players.ContainsKey((byte)assignedId)) assignedId = r.Next(0, 100);
 
                 JoinResponse response = new JoinResponse() { 
                     id = (byte)assignedId,
-                    Players = Players
+                    Players = Players.Values.ToList()
                 };
                 byte[] sendBuffer = EncodeJson(response);
                 socket.Send(sendBuffer);
@@ -182,9 +178,9 @@ namespace Assets.Scripts
                     username = username,
                     socket = socket
                 };
-                Players.Add(player);
+                Players.Add(player.id, player);
+                PlayersToAdd.Enqueue(player.id);
                 PlayersToSpawn.Enqueue(player);
-                addId = assignedId;
             }
         }
         private void UDPThread()
@@ -199,8 +195,8 @@ namespace Assets.Scripts
                 {
                     if (type == UDPMessageType.DummyPacket)
                     {
-                        byte id = UdpIO.Reader.ReadByte();
-                        Players.Find(x => x.id == id).listenPoint = RemoteIpEndPoint;
+                        byte playerId = UdpIO.Reader.ReadByte();
+                        Players[playerId].listenPoint = RemoteIpEndPoint;
                     }
                     else if (type == UDPMessageType.UpdatePos)
                         ReadPlayerPos();

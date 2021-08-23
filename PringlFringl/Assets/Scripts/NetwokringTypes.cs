@@ -38,7 +38,8 @@ public enum UDPMessageType : byte
 public enum TCPMessageType : byte 
 {
     PlayerConnect = 0,
-    SetPosition = 1
+    SetPosition = 1,
+    PlayerShot = 2
 }
 
 public class ProtocolIO 
