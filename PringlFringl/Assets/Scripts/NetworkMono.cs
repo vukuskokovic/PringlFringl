@@ -132,9 +132,9 @@ namespace Assets.Scripts
             else
             {
                 UdpIO.Writer.Write((byte)UDPMessageType.UpdatePos);
-                UdpIO.WriteTransform(id, LocalPlayer.transform.position, LocalPlayer.transform.eulerAngles);
+                UdpIO.WriteTransform(playerId, LocalPlayer.transform.position, LocalPlayer.transform.eulerAngles);
                 byte[] buffer = UdpIO.WriteStream.ToArray();
-                udpSocket.Send(buffer, buffer.Length, serverPoint);
+                udpSocket.Send(buffer, buffer.Length, ServerEndPoint);
             }
             UdpIO.WDispose();
         }
@@ -144,7 +144,7 @@ namespace Assets.Scripts
             byte playerId = UdpIO.Reader.ReadByte();
             Vector3 pos = ReadVector3(ref UdpIO.Reader);
             Vector3 rot = ReadVector3(ref UdpIO.Reader);
-            if (playerId == id) return;
+            if (playerId == Networking.playerId) return;
             NetworkingPlayer player = Players[playerId];
             player.updatePos = pos;
             player.updateRot = rot;

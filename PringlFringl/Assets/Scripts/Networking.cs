@@ -11,9 +11,9 @@ public static class Networking
     public static UdpClient udpSocket = new UdpClient();
     public static Socket tcpSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
     public static Dictionary<byte, NetworkingPlayer> Players = new Dictionary<byte, NetworkingPlayer>();
-    public static IPEndPoint serverPoint;
-    public static byte id;
-    public static string name;
+    public static IPEndPoint ServerEndPoint;
+    public static byte playerId;
+    public static string PlayerName = "Name";
     public static bool Host = false;
 
     private static MemoryStream stream;
