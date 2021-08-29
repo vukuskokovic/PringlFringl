@@ -13,7 +13,7 @@ public class MainMenu : MonoBehaviour
     public Button QuitButton;
     public GameObject JoinPanel, CreatePanel, SettingsPanel;
     public InputField IPField, PortField;
-
+    public PopupPanel popupPanel;
     public void ShowPanel(int index)
     {
         JoinPanel.SetActive(index == 0);
@@ -36,8 +36,21 @@ public class MainMenu : MonoBehaviour
         try
         {
             string[] split = IPField.text.Split(':');
-            if (!IPAddress.TryParse(split[0], out IPAddress RoomAddress)) return;
-            if (!int.TryParse(split[1], out int RoomPort)) return;
+            if(split.Length == 1)
+            {
+                popupPanel.ShowPanel("Please enter correctly", "Enter the ip address in a valid format.\n ip:port example('192.168.0.0:1000')", 10);
+                return;
+            }
+            if (!IPAddress.TryParse(split[0], out IPAddress RoomAddress))
+            {
+                popupPanel.ShowPanel("Please enter the ip address correctly", "You have typed an invalid address format", 10);
+                return;
+            }
+            if (!int.TryParse(split[1], out int RoomPort))
+            {
+                popupPanel.ShowPanel("Please enter the port correctly", "The port that you have typed in is not a valid number", 10);
+                return;
+            }
             IPEndPoint RoomEndPoint = new IPEndPoint(RoomAddress, RoomPort);
 
             udpSocket.Client.Bind(new IPEndPoint(GetLocalIP(), 0));
@@ -58,17 +71,34 @@ public class MainMenu : MonoBehaviour
         }
         catch (Exception ex)
         {
-            GUIUtility.systemCopyBuffer = ex.ToString();
+            popupPanel.ShowPanel("Could not connect to server", ex.ToString(), 10);
         }
     }
 
     public void CreateRoom()
     {
-        IPEndPoint point = new IPEndPoint(GetLocalIP(), int.Parse(PortField.text));
-        tcpSocket.Bind(point);
-        udpSocket.Client.Bind(point);
-        tcpSocket.Listen(3);
-        Host = true;
-        SceneManager.LoadScene(1);
+        if (!int.TryParse(PortField.text, out int port))
+        {
+            popupPanel.ShowPanel("Please enter the port correctly", "The port that you have typed in is not a valid number", 10);
+            return;
+        }
+        else if(port == 0)
+        {
+            popupPanel.ShowPanel("Please enter the port correctly", "The port cannot be 0", 10);
+            return;
+        }
+        try
+        {
+            IPEndPoint point = new IPEndPoint(GetLocalIP(), port);
+            tcpSocket.Bind(point);
+            udpSocket.Client.Bind(point);
+            tcpSocket.Listen(3);
+            Host = true;
+            SceneManager.LoadScene(1);
+        }catch(Exception ex)
+        {
+            popupPanel.ShowPanel("Could not create a room", ex.ToString(), 10);
+            return;
+        }
     }
 }
