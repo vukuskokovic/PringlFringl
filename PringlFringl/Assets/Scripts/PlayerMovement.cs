@@ -4,63 +4,61 @@ using UnityEngine;
 
 public class PlayerMovement : MonoBehaviour
 {
-    public GameObject Player;
-    float lastY;
+    public Transform DirectionTransform;
+    public RectTransform JumpProgress;
     Rigidbody PlayerRigidBody;
     Vector2 mouseRotation = new Vector2(0, 0);
-    public float Sensitivity = 3.0f;
-    public float Speed = 3.0f;
-    float sinceJump = 0.0f;
-    bool InJump = false;
+    public float Sensitivity = 3.0f,
+                 Speed = 3.0f;
+    public float JumpTimer;
+    private float jumpElapsed = 0.0f;
+    bool MoveMouse = true;
     private void Start()
     {
         Cursor.lockState = CursorLockMode.Locked;
         Cursor.visible = false;
         PlayerRigidBody = GetComponent<Rigidbody>();
-       
     }
     void Update()
     {
-        if(InJump)
-            sinceJump += Time.deltaTime;
+        if (jumpElapsed > 0) jumpElapsed -= Time.deltaTime;
+        if (jumpElapsed < 0) jumpElapsed = 0;
 
-        mouseRotation.y += Input.GetAxis("Mouse X") * Sensitivity;
-        mouseRotation.x += Input.GetAxis("Mouse Y") * Sensitivity;
-        transform.localEulerAngles = new Vector3(-mouseRotation.x, mouseRotation.y, 0);
+        JumpProgress.sizeDelta = new Vector2(100 - (jumpElapsed/JumpTimer*100), 100);
+        DirectionTransform.eulerAngles = new Vector3(0, transform.eulerAngles.y, 0);
+        if (MoveMouse)
+        {
+            mouseRotation.y += Input.GetAxis("Mouse X") * Sensitivity;
+            mouseRotation.x = Mathf.Clamp(mouseRotation.x + (Input.GetAxis("Mouse Y") * Sensitivity), -70, 90);
+            transform.localEulerAngles = new Vector3(-mouseRotation.x, mouseRotation.y, 0);
+        }
         if (Input.anyKey)
         {
             Vector3 position = Vector3.zero;
             float SpeedAdd = Speed * Time.deltaTime;
-            if (Input.GetKey(KeyCode.W)) position += transform.forward;
-            if (Input.GetKey(KeyCode.S)) position -= transform.forward;
-            if (Input.GetKey(KeyCode.A)) position -= transform.right;
-            if (Input.GetKey(KeyCode.D)) position += transform.right;
-            if (Input.GetKey(KeyCode.Space) && !InJump && PlayerRigidBody.velocity.y == 0)
+            if (Input.GetKey(KeyCode.W)) position += DirectionTransform.forward;
+            if (Input.GetKey(KeyCode.S)) position -= DirectionTransform.forward;
+            if (Input.GetKey(KeyCode.A)) position -= DirectionTransform.right;
+            if (Input.GetKey(KeyCode.D)) position += DirectionTransform.right;
+            if (Input.GetKey(KeyCode.Space) && jumpElapsed == 0)
             {
-                PlayerRigidBody.AddForce(Vector3.up * 250);
-                InJump = true;
+                jumpElapsed = JumpTimer;
+                PlayerRigidBody.AddForce(DirectionTransform.up * 10, ForceMode.VelocityChange);
             }
             position *= SpeedAdd;
             transform.position += position;
         }
-        if (Input.anyKeyDown) 
+        if (Input.GetKeyDown(KeyCode.Escape))
         {
-            if (Input.GetKeyDown(KeyCode.Escape))
-            {
-                Cursor.lockState = CursorLockMode.None;
-                Cursor.visible = true;
-            }
+            Cursor.lockState = CursorLockMode.None;
+            Cursor.visible = true;
+            MoveMouse = false;
         }
         if (Input.GetMouseButton(0))
         {
             Cursor.lockState = CursorLockMode.Locked;
             Cursor.visible = false;
+            MoveMouse = true;
         }
-        if (lastY == transform.position.y && sinceJump > 0.5)
-        {
-            InJump = false;
-            sinceJump = 0.0f;
-        }
-        lastY = transform.position.y;
     }
 }

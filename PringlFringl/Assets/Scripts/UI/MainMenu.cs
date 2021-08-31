@@ -20,15 +20,22 @@ public class MainMenu : MonoBehaviour
         CreatePanel.SetActive(index == 1);
         SettingsPanel.SetActive(index == 2);
     }
-    void Start()
+
+    private void Start()
     {
-        IPField.text = "192.168.0.17:1420";
+        IPField.text = GetLocalIP().ToString() + ":1420";
         PortField.text = "1420";
         JoinPanel.SetActive(false);
         CreatePanel.SetActive(false);
         SettingsPanel.SetActive(false);
-        QuitButton.onClick.AddListener(() => { Application.Quit(); });
-    }
+        QuitButton.onClick.AddListener(() => {
+#if UNITY_EDITOR
+            UnityEditor.EditorApplication.isPlaying = false;
+#else
+         Application.Quit();
+#endif 
+        });
+        }
 
     public void JoinRoom()
     {
@@ -53,7 +60,6 @@ public class MainMenu : MonoBehaviour
             }
             IPEndPoint RoomEndPoint = new IPEndPoint(RoomAddress, RoomPort);
 
-            udpSocket.Client.Bind(new IPEndPoint(GetLocalIP(), 0));
             tcpSocket.Connect(RoomEndPoint);
             tcpSocket.Send(EncodeString(Networking.PlayerName));
             tcpSocket.ReceiveTimeout = 500;
@@ -67,11 +73,12 @@ public class MainMenu : MonoBehaviour
             udpSocket.Send(new byte[] { 0, response.id }, 2, RoomEndPoint);
             Networking.ServerEndPoint = RoomEndPoint;
             Networking.Host = false;
+            Networking.Connected = true;
             SceneManager.LoadScene(1);
         }
         catch (Exception ex)
         {
-            popupPanel.ShowPanel("Could not connect to server", ex.ToString(), 10);
+            popupPanel.ShowPanel("Could not connect to server", ex.Message, 10);
         }
     }
 
@@ -94,10 +101,11 @@ public class MainMenu : MonoBehaviour
             udpSocket.Client.Bind(point);
             tcpSocket.Listen(3);
             Host = true;
+            Connected = true;
             SceneManager.LoadScene(1);
         }catch(Exception ex)
         {
-            popupPanel.ShowPanel("Could not create a room", ex.ToString(), 10);
+            popupPanel.ShowPanel("Could not create a room", ex.Message, 10);
             return;
         }
     }
