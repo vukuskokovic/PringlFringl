@@ -23,12 +23,13 @@ public class PopupPanel : MonoBehaviour
             if(TimerCount >= NeedTime) ClosePanel();
         }
     }
-    public void ShowPanel(string Header, string Message, float time = 0)
+    public int ShowPanel(string Header, string Message, float time = 0)
     {
         Holder.SetActive(true);
         HeaderText.text = Header;
         MessageText.text = Message;
         NeedTime = time;
+        return 1;
     }
     public void ClosePanel()
     {

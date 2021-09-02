@@ -1,16 +1,13 @@
-using System.Collections;
-using System.Collections.Generic;
+using System;
 using System.Net;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
-using System.Linq;
 using static Networking;
-using System;
 
 public class MainMenu : MonoBehaviour
 {
-    public Button QuitButton;
+    public Button QuitButton, CreateRoomButton, JoinButton;
     public GameObject JoinPanel, CreatePanel, SettingsPanel;
     public InputField IPField, PortField;
     public PopupPanel popupPanel;
@@ -19,6 +16,8 @@ public class MainMenu : MonoBehaviour
         JoinPanel.SetActive(index == 0);
         CreatePanel.SetActive(index == 1);
         SettingsPanel.SetActive(index == 2);
+        CreateRoomButton.onClick.AddListener(() => CreateRoom());
+        JoinButton.onClick.AddListener(() => JoinRoom());
     }
 
     private void Start()
@@ -37,63 +36,36 @@ public class MainMenu : MonoBehaviour
         });
         }
 
-    public void JoinRoom()
+    public int JoinRoom()
     {
-        if (PlayerName == "") return;
+        if (PlayerName == "") return 0;
         try
         {
             string[] split = IPField.text.Split(':');
-            if(split.Length == 1)
-            {
-                popupPanel.ShowPanel("Please enter correctly", "Enter the ip address in a valid format.\n ip:port example('192.168.0.0:1000')", 10);
-                return;
-            }
-            if (!IPAddress.TryParse(split[0], out IPAddress RoomAddress))
-            {
-                popupPanel.ShowPanel("Please enter the ip address correctly", "You have typed an invalid address format", 10);
-                return;
-            }
-            if (!int.TryParse(split[1], out int RoomPort))
-            {
-                popupPanel.ShowPanel("Please enter the port correctly", "The port that you have typed in is not a valid number", 10);
-                return;
-            }
-            IPEndPoint RoomEndPoint = new IPEndPoint(RoomAddress, RoomPort);
-
-            tcpSocket.Connect(RoomEndPoint);
-            tcpSocket.Send(EncodeString(Networking.PlayerName));
-            tcpSocket.ReceiveTimeout = 500;
-
-            byte[] buffer = new byte[200];
-            int receveied = tcpSocket.Receive(buffer);
-            JoinResponse response = DecodeJson<JoinResponse>(buffer, receveied);
-            foreach (var player in response.Players)
-                Players.Add(player.id, player);
-            Networking.playerId = response.id;
-            udpSocket.Send(new byte[] { 0, response.id }, 2, RoomEndPoint);
-            Networking.ServerEndPoint = RoomEndPoint;
-            Networking.Host = false;
-            Networking.Connected = true;
+            if(split.Length == 1) 
+                return popupPanel.ShowPanel("Please enter correctly", "Enter the ip address in a valid format.\n ip:port example('192.168.0.0:1000')", 10);
+            if (!IPAddress.TryParse(split[0], out IPAddress RoomAddress)) 
+                return popupPanel.ShowPanel("Please enter the ip address correctly", "You have typed an invalid address format", 10);
+            if (!int.TryParse(split[1], out int RoomPort)) 
+                return popupPanel.ShowPanel("Please enter the port correctly", "The port that you have typed in is not a valid number", 10);
+            
+            ServerEndPoint = new IPEndPoint(RoomAddress, RoomPort);
+            Networking.Connect();
             SceneManager.LoadScene(1);
+            return 1;
         }
         catch (Exception ex)
         {
-            popupPanel.ShowPanel("Could not connect to server", ex.Message, 10);
+            return popupPanel.ShowPanel("Could not connect to server", ex.Message, 10);
         }
     }
 
-    public void CreateRoom()
+    public int CreateRoom()
     {
         if (!int.TryParse(PortField.text, out int port))
-        {
-            popupPanel.ShowPanel("Please enter the port correctly", "The port that you have typed in is not a valid number", 10);
-            return;
-        }
+            return popupPanel.ShowPanel("Please enter the port correctly", "The port that you have typed in is not a valid number", 10);
         else if(port == 0)
-        {
-            popupPanel.ShowPanel("Please enter the port correctly", "The port cannot be 0", 10);
-            return;
-        }
+            return popupPanel.ShowPanel("Please enter the port correctly", "The port cannot be 0", 10);
         try
         {
             IPEndPoint point = new IPEndPoint(GetLocalIP(), port);
@@ -103,10 +75,10 @@ public class MainMenu : MonoBehaviour
             Host = true;
             Connected = true;
             SceneManager.LoadScene(1);
+            return 1;
         }catch(Exception ex)
         {
-            popupPanel.ShowPanel("Could not create a room", ex.Message, 10);
-            return;
+            return popupPanel.ShowPanel("Could not create a room", ex.Message, 10);
         }
     }
 }

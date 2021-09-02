@@ -6,6 +6,9 @@ public class PlayerMovement : MonoBehaviour
 {
     public Transform DirectionTransform;
     public RectTransform JumpProgress;
+    public NetworkMono networkMono;
+
+
     Rigidbody PlayerRigidBody;
     Vector2 mouseRotation = new Vector2(0, 0);
     public float Sensitivity = 3.0f,
@@ -54,11 +57,22 @@ public class PlayerMovement : MonoBehaviour
             Cursor.visible = true;
             MoveMouse = false;
         }
-        if (Input.GetMouseButton(0))
+        if (Input.GetMouseButtonDown(0))
         {
-            Cursor.lockState = CursorLockMode.Locked;
-            Cursor.visible = false;
-            MoveMouse = true;
+            if (!MoveMouse)
+            {
+                Cursor.lockState = CursorLockMode.Locked;
+                Cursor.visible = false;
+                MoveMouse = true;
+            }
+            else
+            {
+                NetworkMono.TcpIO.LWrite();
+                NetworkMono.TcpIO.WriteShot(Camera.main.transform.position, Camera.main.transform.eulerAngles, Networking.playerId);
+                NetworkMono.NetworkingInterface.SendTcp(NetworkMono.TcpIO.WriteStream.ToArray());
+                NetworkMono.TcpIO.WDispose();
+                networkMono.SpawnBullet(Camera.main.transform.position, Camera.main.transform.eulerAngles);
+            }
         }
     }
 }

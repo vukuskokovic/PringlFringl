@@ -1,61 +1,41 @@
-﻿using System.Net.Sockets;
+﻿using System;
+using System.Net.Sockets;
 using System.Net;
-using Newtonsoft.Json;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text;
 using UnityEngine;
-using Assets.Scripts;
+using Newtonsoft.Json;
 
-public static class Networking 
+public static class Networking
 {
     public static UdpClient udpSocket = new UdpClient();
     public static Socket tcpSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
     public static Dictionary<byte, NetworkingPlayer> Players = new Dictionary<byte, NetworkingPlayer>();
     public static IPEndPoint ServerEndPoint;
+
     public static byte playerId;
     public static string PlayerName = "Name";
+
     public static bool Host = false;
     public static bool Connected = false;
 
-    private static MemoryStream stream;
-    private static BinaryWriter writer;
     public static IPAddress GetLocalIP() 
     {
-        var host = Dns.GetHostEntry(Dns.GetHostName());
-        foreach (var ip in host.AddressList)
-            if(ip.AddressFamily == AddressFamily.InterNetwork && ip.ToString()[1] == '9')
-                return ip;
+        foreach (IPAddress ip in Dns.GetHostEntry(Dns.GetHostName()).AddressList.Where(x => x.AddressFamily == AddressFamily.InterNetwork && x.ToString()[1] == '9'))
+            return ip;
         
-        throw new System.Exception("No network adapters with an IPv4 address in the system!");
+        throw new Exception("Could not find local ipaddres probably not connected to internet or atleast lan");
     }
-    public static byte[] EncodeString(string str)
-    {
-        return System.Text.Encoding.ASCII.GetBytes(str);
-    }
-
-    public static string DecodeString(byte[] buffer, int received)
-    {
-        return System.Text.Encoding.ASCII.GetString(buffer, 0, received);
-    }
-    public static byte[] EncodeJson<T>(T obj)
-    {
-        return EncodeString(JsonConvert.SerializeObject(obj));
-    }
-
-    public static T DecodeJson<T>(byte[] buffer, int receved)
-    {
-        return JsonConvert.DeserializeObject<T>(DecodeString(buffer, receved));
-    }
-    public static Vector3 ReadVector3(ref BinaryReader reader)
-    {
-        return new Vector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
-    }
-
+    public static byte[] EncodeString(string stringToEncode) => Encoding.ASCII.GetBytes(stringToEncode);
+    public static string DecodeString(byte[] buffer, int received) => Encoding.ASCII.GetString(buffer, 0, received);
+    public static byte[] EncodeJson<T>(T objectToEncode) => EncodeString(JsonConvert.SerializeObject(objectToEncode));
+    public static T DecodeJson<T>(byte[] buffer, int received) => JsonConvert.DeserializeObject<T>(DecodeString(buffer, received));
     public static GameObject InitNewPlayerEntity()
     {
-        var obj = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-        var body = obj.AddComponent<Rigidbody>();
+        GameObject obj = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+        Rigidbody body = obj.AddComponent<Rigidbody>();
         body.freezeRotation = true;
         body.constraints = RigidbodyConstraints.FreezePosition;
         return obj;
@@ -64,16 +44,33 @@ public static class Networking
     public static void ReadPlayerPos()
     {
         byte playerId = NetworkMono.UdpIO.Reader.ReadByte();
-        Vector3 pos = ReadVector3(ref NetworkMono.UdpIO.Reader);
-        Vector3 rot = ReadVector3(ref NetworkMono.UdpIO.Reader);
+        Vector3 pos = NetworkMono.UdpIO.ReadVector3();
+        Vector3 rot = NetworkMono.UdpIO.ReadVector3();
         if (playerId == Networking.playerId) return;
         NetworkingPlayer player = Players[playerId];
         player.SinceLastUpdate = 0f;
-        Assets.Scripts.NetworkMono.MainThreadInvokes.Enqueue(() =>
+        NetworkMono.MainThreadInvokes.Enqueue(() =>
         {
             player.Entity.transform.position = pos;
             player.Entity.transform.eulerAngles = rot;
         });
+    }
+
+    public static void Connect()
+    {
+        tcpSocket.Connect(ServerEndPoint);
+        tcpSocket.Send(EncodeString(Networking.PlayerName));
+        tcpSocket.ReceiveTimeout = 500;
+
+        byte[] buffer = new byte[200];
+        int receveied = tcpSocket.Receive(buffer);
+        JoinResponse response = DecodeJson<JoinResponse>(buffer, receveied);
+        foreach (var player in response.Players)
+            Players.Add(player.id, player);
+        Networking.playerId = response.id;
+        udpSocket.Send(new byte[] { 0, response.id }, 2, ServerEndPoint);
+        Networking.Host = false;
+        Networking.Connected = true;
     }
 }
 
@@ -146,11 +143,24 @@ public class ProtocolIO
     public void WriteTransform(byte id, Vector3 pos, Vector3 rot)
     {
         Writer.Write(id);
-        Writer.Write(pos.x);
-        Writer.Write(pos.y);
-        Writer.Write(pos.z);
-        Writer.Write(rot.x);
-        Writer.Write(rot.y);
-        Writer.Write(rot.z);
+        WriteVector3(pos);
+        WriteVector3(rot);
     }
+
+    public void WriteVector3(Vector3 vec)
+    {
+        Writer.Write(vec.x);
+        Writer.Write(vec.y);
+        Writer.Write(vec.z);
+    }
+
+    public void WriteShot(Vector3 pos, Vector3 rot, byte id)
+    {
+        Writer.Write((byte)TCPMessageType.PlayerShot);
+        Writer.Write(id);
+        WriteVector3(pos);
+        WriteVector3(rot);
+    }
+
+    public Vector3 ReadVector3() => new Vector3(Reader.ReadSingle(), Reader.ReadSingle(), Reader.ReadSingle());
 }

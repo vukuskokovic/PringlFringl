@@ -1,10 +1,8 @@
 ﻿using System.Net;
 
-namespace Assets.Scripts
+public interface INetworkingInterface
 {
-    interface INetworkingInterface
-    {
-        void ReadUdp(UDPMessageType type, int bufferLength, IPEndPoint RemoteIpEndPoint);
-        void UpdatePosition();
-    }
+    void ReadUdp(UDPMessageType type, int bufferLength, IPEndPoint RemoteIpEndPoint);
+    void UpdatePosition();
+    void SendTcp(byte[] buffer);
 }
