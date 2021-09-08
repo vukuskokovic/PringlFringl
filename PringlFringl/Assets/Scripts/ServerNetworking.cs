@@ -5,39 +5,39 @@ using System.Net;
 using System;
 using System.Net.Sockets;
 using static Networking;
-using static NetworkMono;
 using System.IO;
-
+using System.Threading.Tasks;
 
 public class ServerNetworking : MonoBehaviour, INetworkingInterface
 {
-    private NetworkMono NetworkingScript;
-        
-
+    private readonly NetworkIO TcpIO = Networking.NetworkMono.TcpIO;
+    private readonly NetworkIO UdpIO = Networking.NetworkMono.UdpIO;
     // Use this for initialization
     void Start()
     {
-        NetworkingScript = GetComponent<NetworkMono>();
         Players.Add(0, new NetworkingPlayer()
         {
-            Entity = NetworkingScript.LocalPlayer,
+            Entity = Networking.NetworkMono.LocalPlayer,
             id = 0,
             username = "Host",
             ServerConnected = true
         });
-        tcpSocket.BeginAccept(new AsyncCallback(TCPEndAccept), null);
+        Networking.NetworkMono.LocalPlayer.AddComponent<ServerPlayer>();
+        TcpSocket.BeginAccept(new AsyncCallback(TCPEndAccept), null);
+        Networking.PlayerAlive = true;
         SpawnPlayer(Players[0]);
     }
 
     // Update is called once per frame
     void Update()
     {
-        var currentPlayers = NetworkingScript.PlayersCurrentFrame;
+        var currentPlayers = Networking.NetworkMono.PlayersCurrentFrame;
+        bool allDead = true;
         for (int i = 0; i < currentPlayers.Length; i++)
         {
             var player = currentPlayers[i];
-
-            if (player.socket == null) continue;
+            if (player.Alive) allDead = false;
+            if (player.id == 0) continue;
 
             else if (player.ServerConnected)
             {
@@ -56,13 +56,16 @@ public class ServerNetworking : MonoBehaviour, INetworkingInterface
                     }
                 }else if(player.socket.Available > 0)
                 {
-                    byte[] buffer = new byte[128];
-                    int received = player.socket.Receive(buffer);
-                    TcpIO.LRead(buffer);
-                    while(TcpIO.ReadStream.Position != TcpIO.ReadStream.Length)
-                        ReadTcp();
+                    Task.Run(() => 
+                    {
+                        byte[] receivedBuffer = new byte[128];
+                        int bytesReceived = player.socket.Receive(receivedBuffer);
+                        TcpIO.LRead(receivedBuffer, bytesReceived);
+                        while (TcpIO.ReadStream.Position != TcpIO.ReadStream.Length)
+                            ReadTcp();
 
-                    TcpIO.RDispose();
+                        TcpIO.RDispose();
+                    });
                 }
             }
             else
@@ -77,43 +80,50 @@ public class ServerNetworking : MonoBehaviour, INetworkingInterface
                     TcpIO.Writer.Write((byte)TCPMessageType.PlayerDisconnect);
                     TcpIO.Writer.Write(player.id);
                     byte[] buffer = TcpIO.WriteStream.ToArray();
-                    TCPSendEveryone(ref buffer);
+                    SendTcp(buffer);
                     TcpIO.WDispose();
                     Debug.Log("player disconnected");
                 }
+            }
+        }
+        if (allDead)
+        {
+            Debug.Log("Starting the round");
+            for(int i = 0; i < Networking.NetworkMono.PlayersCurrentFrame.Length; i++)
+            {
+                var player = Networking.NetworkMono.PlayersCurrentFrame[i];
+                SpawnPlayer(player);
             }
         }
     }
 
     void ReadTcp()
     {
-        TCPMessageType type = (TCPMessageType)TcpIO.Reader.ReadByte();
-        if(type == TCPMessageType.PlayerShot)
+        try
         {
-            
-            byte playerId = TcpIO.Reader.ReadByte();
-            Vector3 pos = TcpIO.ReadVector3();
-            Vector3 rot = TcpIO.ReadVector3();
-            NetworkingScript.SpawnBullet(pos, rot);
-            TcpIO.LWrite();
-            TcpIO.WriteShot(pos, rot, playerId);
-            byte[] buffer = TcpIO.WriteStream.ToArray();
-            TcpIO.WDispose();
-            for(int i = 0; i < NetworkingScript.PlayersCurrentFrame.Length; i++)
+            TCPMessageType type = (TCPMessageType)TcpIO.Reader.ReadByte();
+            if (type == TCPMessageType.PlayerShot)
             {
-                if (NetworkingScript.PlayersCurrentFrame[i].id == playerId && NetworkingScript.PlayersCurrentFrame[i].id != 0) continue;
-                try
+                var projInfo = TcpIO.ReadProjectileInfo();
+                if (Players[projInfo.id].Alive)
                 {
-                    NetworkingScript.PlayersCurrentFrame[i].socket.Send(buffer);
+                    TcpIO.LWrite();
+                    TcpIO.WriteShot(projInfo.origin, projInfo.rotation, projInfo.id);
+                    byte[] buffer = TcpIO.WriteStream.ToArray();
+                    TcpIO.WDispose();
+                    SendTcp(buffer);
+                    Networking.NetworkEvents.SpawnBullet(projInfo);
                 }
-                catch { }
             }
+        }catch(SocketException ex)
+        {
+            Debug.LogError(ex.Message);
         }
     }
 
     void TCPEndAccept(IAsyncResult result) // Server
     {
-        Socket socket = tcpSocket.EndAccept(result);
+        Socket socket = TcpSocket.EndAccept(result);
         try
         {
             byte[] buffer = new byte[20];
@@ -147,11 +157,12 @@ public class ServerNetworking : MonoBehaviour, INetworkingInterface
                 socket = socket,
                 ServerConnected = true
             };
-            MainThreadInvokes.Enqueue(() =>
+            Debug.Log("Player connected " + player.username + " id: " + player.id);
+            NetworkMono.MainThreadInvokes.Enqueue(() =>
             {
                 try
                 {
-                    player.Entity = InitNewPlayerEntity();
+                    player.Entity = InitNewPlayerEntity(player.id);
                     SpawnPlayer(player);
                 }
                 catch (Exception ex)
@@ -165,7 +176,7 @@ public class ServerNetworking : MonoBehaviour, INetworkingInterface
         {
             Debug.Log("ACCEPT FUNCTION:\n" + ex);
         }
-        tcpSocket.BeginAccept(new AsyncCallback(TCPEndAccept), null);
+        TcpSocket.BeginAccept(new AsyncCallback(TCPEndAccept), null);
     }
 
     public void ReadUdp(UDPMessageType type, int bufferLength, IPEndPoint RemoteIpEndPoint)
@@ -176,7 +187,7 @@ public class ServerNetworking : MonoBehaviour, INetworkingInterface
             Players[playerId].listenPoint = RemoteIpEndPoint;
         }
         else if (type == UDPMessageType.UpdatePos)
-            ReadPlayerPos();
+            UdpIO.ReadPlayerPos();
     }
 
     public void UpdatePosition()
@@ -190,7 +201,7 @@ public class ServerNetworking : MonoBehaviour, INetworkingInterface
         byte[] buffer = UdpIO.WriteStream.ToArray();
         for (int i = 0; i < players.Length; i++)
             if (players[i].listenPoint != null && players[i].ServerConnected)
-                udpSocket.Send(buffer, buffer.Length, players[i].listenPoint);
+                UdpSocket.Send(buffer, buffer.Length, players[i].listenPoint);
     }
 
     void SendJoinMessage(string username, int id) // Server
@@ -198,53 +209,51 @@ public class ServerNetworking : MonoBehaviour, INetworkingInterface
         //TcpIO is not used becouse this is in another thread and might overlap with already working TcpIO
         MemoryStream stream = new MemoryStream();
         BinaryWriter writer = new BinaryWriter(stream);
-        writer.Write((byte)0);
+        writer.Write((byte)TCPMessageType.PlayerConnect);
         writer.Write((byte)id);
         writer.Write(username);
         byte[] buff = stream.ToArray();
-        TCPSendEveryone(ref buff);
+        SendTcp(buff);
         stream.Dispose();
         writer.Dispose();
     }
 
-    void TCPSendEveryone(ref byte[] buffer)
-    {
-        NetworkingPlayer[] players = Players.Values.ToArray();
-        for (int i = 0; i < players.Length; i++)
-            if (players[i].socket != null)
-                players[i].socket.Send(buffer);
-
-        buffer = null;
-    }
-
     void SpawnPlayer(NetworkingPlayer player) // Server
     {
-        int spawnId = new System.Random().Next(0, NetworkingScript.PlayerSpawns.Count);
-        Transform t = NetworkingScript.PlayerSpawns[spawnId];
-        if (player.socket != null)
+        int spawnId = new System.Random().Next(0, Networking.NetworkMono.PlayerSpawns.Count);
+        Transform spawnPoint = Networking.NetworkMono.PlayerSpawns[spawnId];
+        if (player.id != 0)
         {
             TcpIO.LWrite();
             TcpIO.Writer.Write((byte)TCPMessageType.SetPosition);
-            TcpIO.Writer.Write(t.position.x);
-            TcpIO.Writer.Write(t.position.y);
-            TcpIO.Writer.Write(t.position.z);
+            TcpIO.WriteVector3(spawnPoint.position);
+            TcpIO.Writer.Write(true);
             player.socket.Send(TcpIO.WriteStream.ToArray());
             TcpIO.WDispose();
         }
         else
-            NetworkingScript.LocalPlayer.transform.position = t.position;
+        {
+            Networking.NetworkMono.LocalPlayer.transform.position = spawnPoint.position;
+            Networking.PlayerAlive = true;
+        }
+
+        player.Alive = true;
     }
 
     public void SendTcp(byte[] buffer)
     {
-        for(int i = 0; i < NetworkingScript.PlayersCurrentFrame.Length; i++)
+        for(int i = 0; i < Networking.NetworkMono.PlayersCurrentFrame.Length; i++)
         {
-            if (NetworkingScript.PlayersCurrentFrame[i].id == 0) continue;
+            var player = Networking.NetworkMono.PlayersCurrentFrame[i];
+            if (player.id == 0 || !player.ServerConnected) continue;
             try
             {
-                NetworkingScript.PlayersCurrentFrame[i].socket.Send(buffer);
+                player.socket.Send(buffer);
             }
-            catch(Exception ex) { Debug.Log(ex); }
+            catch(SocketException ex) {
+                player.ServerConnected = false;
+                Debug.LogError(ex);
+            }
         }
     }
 }

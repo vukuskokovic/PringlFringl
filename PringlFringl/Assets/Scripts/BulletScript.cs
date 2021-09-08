@@ -4,26 +4,36 @@ using UnityEngine;
 
 public class BulletScript : MonoBehaviour
 {
-    bool positionSet = false;
-    public void SetPosition(Vector3 position, Vector3 rotation)
+    bool ParamsSet = false;
+
+    public Collider BulletColider;
+    public float BulletSpeed;
+    public float BulletDrop;
+    private GameObject entity;
+    public void SetParams(ProjectileInfo info)
     {
-        transform.position = position;
-        transform.eulerAngles = rotation + (Vector3.right*90);
-        positionSet = true;
+        transform.position = info.origin;
+        transform.eulerAngles = info.rotation + (Vector3.right*90);
+        entity = info.id == Networking.LocalPlayerId ? Networking.NetworkMono.LocalPlayer : Networking.Players[info.id].Entity;
+        name = "Projectile";
+        gameObject.layer = 6;
+        Physics.IgnoreCollision(BulletColider, entity.gameObject.GetComponent<Collider>());
+        BulletColider.enabled = true;
+        ParamsSet = true;
     }
 
     private void Update()
     {
-        if (positionSet)
+        if (ParamsSet)
         {
-            transform.position += transform.up * Time.deltaTime * 10;
-            //transform.eulerAngles = new Vector3(transform.eulerAngles.x - Time.deltaTime * 1000, transform.eulerAngles.y, transform.eulerAngles.z);
+            transform.position += transform.up * Time.deltaTime * BulletSpeed;
         }
     }
-
-    void OnCollisionEnter(Collision collision)
+    private void OnCollisionEnter(Collision collision)
     {
-        var point = collision.contacts[0];
+        if (Networking.PlayerAlive)
+            Networking.NetworkMono.LocalPlayer.GetComponent<Rigidbody>().AddExplosionForce(250, collision.transform.position, 10);
+        
         Destroy(gameObject);
     }
 }

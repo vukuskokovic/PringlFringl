@@ -18,6 +18,7 @@ public class MainMenu : MonoBehaviour
         SettingsPanel.SetActive(index == 2);
         CreateRoomButton.onClick.AddListener(() => CreateRoom());
         JoinButton.onClick.AddListener(() => JoinRoom());
+        Screen.SetResolution(800, 600, false);
     }
 
     private void Start()
@@ -34,11 +35,12 @@ public class MainMenu : MonoBehaviour
          Application.Quit();
 #endif 
         });
-        }
+        QualitySettings.SetQualityLevel(6);
+    }
 
     public int JoinRoom()
     {
-        if (PlayerName == "") return 0;
+        if (LocalPlayerName == "") return 0;
         try
         {
             string[] split = IPField.text.Split(':');
@@ -69,11 +71,11 @@ public class MainMenu : MonoBehaviour
         try
         {
             IPEndPoint point = new IPEndPoint(GetLocalIP(), port);
-            tcpSocket.Bind(point);
-            udpSocket.Client.Bind(point);
-            tcpSocket.Listen(3);
-            Host = true;
-            Connected = true;
+            TcpSocket.Bind(point);
+            UdpSocket.Client.Bind(point);
+            TcpSocket.Listen(3);
+            IsHost = true;
+            IsConnected = true;
             SceneManager.LoadScene(1);
             return 1;
         }catch(Exception ex)

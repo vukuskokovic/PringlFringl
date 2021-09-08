@@ -6,8 +6,6 @@ public class PlayerMovement : MonoBehaviour
 {
     public Transform DirectionTransform;
     public RectTransform JumpProgress;
-    public NetworkMono networkMono;
-
 
     Rigidbody PlayerRigidBody;
     Vector2 mouseRotation = new Vector2(0, 0);
@@ -15,15 +13,20 @@ public class PlayerMovement : MonoBehaviour
                  Speed = 3.0f;
     public float JumpTimer;
     private float jumpElapsed = 0.0f;
+    float shootTimer = 0.0f;
     bool MoveMouse = true;
     private void Start()
     {
         Cursor.lockState = CursorLockMode.Locked;
-        Cursor.visible = false;
+        Cursor.visible = true;
         PlayerRigidBody = GetComponent<Rigidbody>();
     }
     void Update()
     {
+        if (shootTimer != 0) shootTimer += Time.deltaTime;
+        if(shootTimer >= 0.5)
+            shootTimer = 0f;
+        
         if (jumpElapsed > 0) jumpElapsed -= Time.deltaTime;
         if (jumpElapsed < 0) jumpElapsed = 0;
 
@@ -65,14 +68,12 @@ public class PlayerMovement : MonoBehaviour
                 Cursor.visible = false;
                 MoveMouse = true;
             }
-            else
+            if(Networking.PlayerAlive && shootTimer == 0)
             {
-                NetworkMono.TcpIO.LWrite();
-                NetworkMono.TcpIO.WriteShot(Camera.main.transform.position, Camera.main.transform.eulerAngles, Networking.playerId);
-                NetworkMono.NetworkingInterface.SendTcp(NetworkMono.TcpIO.WriteStream.ToArray());
-                NetworkMono.TcpIO.WDispose();
-                networkMono.SpawnBullet(Camera.main.transform.position, Camera.main.transform.eulerAngles);
+                shootTimer += Time.deltaTime;
+                Networking.NetworkEvents.Shoot(Camera.main.transform.position, Camera.main.transform.eulerAngles);
             }
+            
         }
     }
 }

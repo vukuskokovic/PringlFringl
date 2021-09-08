@@ -11,24 +11,29 @@ using static Networking;
 public class NetworkMono : MonoBehaviour
 {
     // Public variables
-    public GameObject LocalPlayer;
+    public GameObject LocalPlayer, BulletPrefab;
     public List<Transform> PlayerSpawns;
+    public List<Transform> Respawns;
     public PopupPanel popupPanel;
     public int Ticks;
-    public GameObject BulletPrefab;
+
     [HideInInspector]
     public NetworkingPlayer[] PlayersCurrentFrame;
 
+    public static Queue<Action> MainThreadInvokes = new Queue<Action>();
+    public INetworkingInterface NetworkingInterface;
+    public NetworkIO UdpIO = new NetworkIO(),
+                             TcpIO = new NetworkIO();
     // Private variables
-    public static INetworkingInterface NetworkingInterface;
-    public static ProtocolIO UdpIO = new ProtocolIO(),
-                        TcpIO = new ProtocolIO();
+
     private float UpdateTimer = 0.0f;
     private bool GameRunning = true;
-    public static Queue<Action> MainThreadInvokes = new Queue<Action>();
+    
     void Start()
     {
-        if (Host) NetworkingInterface = gameObject.AddComponent<ServerNetworking>();
+        Networking.NetworkMono = this;
+        Physics.IgnoreLayerCollision(6, 7);//Makes bullets not collide with bullet through objects
+        if (IsHost) NetworkingInterface = gameObject.AddComponent<ServerNetworking>();
         else NetworkingInterface = gameObject.AddComponent<ClientNetworking>();
         new Thread(UDPThread).Start();
     }
@@ -36,12 +41,11 @@ public class NetworkMono : MonoBehaviour
     private void OnApplicationQuit()
     {
         GameRunning = false;
-        Connected = false;
+        IsConnected = false;
         try
         {
-            Debug.Log("Quiting");
-            tcpSocket.Dispose();
-            udpSocket.Dispose();
+            TcpSocket.Dispose();
+            UdpSocket.Dispose();
         }
         catch (Exception ex)
         {
@@ -64,29 +68,23 @@ public class NetworkMono : MonoBehaviour
         }
     }
 
-    public void SpawnBullet(Vector3 position, Vector3 rotation)
-    {
-        var obj = Instantiate(BulletPrefab);
-        obj.GetComponent<BulletScript>().SetPosition(position, rotation);
-    }
-
     void UDPThread()
     {
         while (GameRunning)
         {
-            if (!Connected) continue;
+            if (!IsConnected) continue;
             try 
             {
                 IPEndPoint RemoteIpEndPoint = new IPEndPoint(IPAddress.Any, 0);
-                byte[] buffer = udpSocket.Receive(ref RemoteIpEndPoint);
+                byte[] buffer = UdpSocket.Receive(ref RemoteIpEndPoint);
                 UdpIO.LRead(buffer);
                 UDPMessageType type = (UDPMessageType)UdpIO.Reader.ReadByte();
                 NetworkingInterface.ReadUdp(type, buffer.Length, RemoteIpEndPoint);
                 UdpIO.RDispose();
             }catch(SocketException ex)
             {
-                if (!Connected) continue;
-                else if (ex.ErrorCode == 10054)// For some reason this exception is thrown when player is disconnecting(server side, code 10054)
+                if (!IsConnected && UdpSocket == null) return;
+                else if (ex.ErrorCode == 10054 || ex.ErrorCode == 10004)// For some reason this exception is thrown when player is disconnecting(server side, code 10054)
                     continue;
                 else Debug.LogError(ex.ErrorCode);
             }

@@ -10,16 +10,20 @@ using Newtonsoft.Json;
 
 public static class Networking
 {
-    public static UdpClient udpSocket = new UdpClient();
-    public static Socket tcpSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+    public static UdpClient UdpSocket = new UdpClient();
+    public static Socket TcpSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
     public static Dictionary<byte, NetworkingPlayer> Players = new Dictionary<byte, NetworkingPlayer>();
     public static IPEndPoint ServerEndPoint;
 
-    public static byte playerId;
-    public static string PlayerName = "Name";
+    public static NetworkEvents NetworkEvents;
+    public static NetworkMono NetworkMono;
 
-    public static bool Host = false;
-    public static bool Connected = false;
+    public static byte LocalPlayerId;
+    public static string LocalPlayerName = "Name";
+    public static bool PlayerAlive = false;
+
+    public static bool IsHost = false;
+    public static bool IsConnected = false;
 
     public static IPAddress GetLocalIP() 
     {
@@ -32,45 +36,35 @@ public static class Networking
     public static string DecodeString(byte[] buffer, int received) => Encoding.ASCII.GetString(buffer, 0, received);
     public static byte[] EncodeJson<T>(T objectToEncode) => EncodeString(JsonConvert.SerializeObject(objectToEncode));
     public static T DecodeJson<T>(byte[] buffer, int received) => JsonConvert.DeserializeObject<T>(DecodeString(buffer, received));
-    public static GameObject InitNewPlayerEntity()
+    public static GameObject InitNewPlayerEntity(byte id = 0)
     {
         GameObject obj = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+        obj.name = "Player " + id;
+
         Rigidbody body = obj.AddComponent<Rigidbody>();
         body.freezeRotation = true;
         body.constraints = RigidbodyConstraints.FreezePosition;
+
+        if (IsHost)
+            obj.AddComponent<ServerPlayer>().SetId(id);
+        
         return obj;
     }
-
-    public static void ReadPlayerPos()
-    {
-        byte playerId = NetworkMono.UdpIO.Reader.ReadByte();
-        Vector3 pos = NetworkMono.UdpIO.ReadVector3();
-        Vector3 rot = NetworkMono.UdpIO.ReadVector3();
-        if (playerId == Networking.playerId) return;
-        NetworkingPlayer player = Players[playerId];
-        player.SinceLastUpdate = 0f;
-        NetworkMono.MainThreadInvokes.Enqueue(() =>
-        {
-            player.Entity.transform.position = pos;
-            player.Entity.transform.eulerAngles = rot;
-        });
-    }
-
     public static void Connect()
     {
-        tcpSocket.Connect(ServerEndPoint);
-        tcpSocket.Send(EncodeString(Networking.PlayerName));
-        tcpSocket.ReceiveTimeout = 500;
+        TcpSocket.Connect(ServerEndPoint);
+        TcpSocket.Send(EncodeString(LocalPlayerName));
+        TcpSocket.ReceiveTimeout = 500;
 
         byte[] buffer = new byte[200];
-        int receveied = tcpSocket.Receive(buffer);
-        JoinResponse response = DecodeJson<JoinResponse>(buffer, receveied);
-        foreach (var player in response.Players)
+        int receveied = TcpSocket.Receive(buffer);
+        JoinResponse ServerResponse = DecodeJson<JoinResponse>(buffer, receveied);
+        foreach (var player in ServerResponse.Players)
             Players.Add(player.id, player);
-        Networking.playerId = response.id;
-        udpSocket.Send(new byte[] { 0, response.id }, 2, ServerEndPoint);
-        Networking.Host = false;
-        Networking.Connected = true;
+        LocalPlayerId = ServerResponse.id;
+        UdpSocket.Send(new byte[] { 0, ServerResponse.id }, 2, ServerEndPoint);
+        IsHost = false;
+        IsConnected = true;
     }
 }
 
@@ -80,8 +74,8 @@ public class NetworkingPlayer
     public GameObject Entity;
     public IPEndPoint listenPoint = null;
     public Socket socket;
-    public bool Spawned = false;
     public bool ServerConnected = false;
+    public bool Alive = false;
     public float ServerRecconectTimer = 0.0f, SinceLastUpdate = 0.0f;
     [JsonProperty]
     public byte id;
@@ -89,6 +83,11 @@ public class NetworkingPlayer
     public string username;
 }
 
+public class ProjectileInfo 
+{
+    public Vector3 origin, rotation;
+    public byte id;
+}
 public class JoinResponse
 {
     public List<NetworkingPlayer> Players = new List<NetworkingPlayer>();
@@ -107,10 +106,11 @@ public enum TCPMessageType : byte
     SetPosition = 1,
     PlayerShot = 2,
     ServerPing = 3,
-    PlayerDisconnect = 4
+    PlayerDisconnect = 4,
+    PlayerDied = 5
 }
 
-public class ProtocolIO
+public class NetworkIO
 {
     public MemoryStream WriteStream, ReadStream;
     public BinaryWriter Writer;
@@ -119,6 +119,12 @@ public class ProtocolIO
     public void LRead(byte[] buffer)// Load read mode
     {
         ReadStream = new MemoryStream(buffer);
+        Reader = new BinaryReader(ReadStream);
+    }
+
+    public void LRead(byte[] buffer, int count)// Load read mode
+    {
+        ReadStream = new MemoryStream(buffer, 0 , count);
         Reader = new BinaryReader(ReadStream);
     }
 
@@ -161,6 +167,29 @@ public class ProtocolIO
         WriteVector3(pos);
         WriteVector3(rot);
     }
-
+    public ProjectileInfo ReadProjectileInfo()
+    {
+        ProjectileInfo info = new ProjectileInfo();
+        byte readId = Reader.ReadByte();
+        info.origin = ReadVector3();
+        info.rotation = ReadVector3();
+        info.id = readId;
+        return info;
+    }
     public Vector3 ReadVector3() => new Vector3(Reader.ReadSingle(), Reader.ReadSingle(), Reader.ReadSingle());
+
+    public void ReadPlayerPos()
+    {
+        byte playerId = Reader.ReadByte();
+        Vector3 pos = ReadVector3();
+        Vector3 rot = ReadVector3();
+        if (playerId == Networking.LocalPlayerId) return;
+        NetworkingPlayer player = Networking.Players[playerId];
+        player.SinceLastUpdate = 0f;
+        NetworkMono.MainThreadInvokes.Enqueue(() =>
+        {
+            player.Entity.transform.position = pos;
+            player.Entity.transform.eulerAngles = rot;
+        });
+    }
 }

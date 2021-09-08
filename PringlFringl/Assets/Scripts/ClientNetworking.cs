@@ -2,61 +2,63 @@
 using System.Net;
 using System.Net.Sockets;
 using UnityEngine;
+using static Networking;
 
 public class ClientNetworking : MonoBehaviour, INetworkingInterface
 {
-    private NetworkMono NetworkingScript;
-    private float sinceServerUpdated = 0.0f;
-    private float tryConnectTimer = 0.0f;
+    private float LastServerUpdate = 0.0f;
+    private float ReconnectTimer = 0.0f;
+    private readonly NetworkIO TcpIO = Networking.NetworkMono.TcpIO;
+    private readonly NetworkIO UdpIO = Networking.NetworkMono.UdpIO;
     // Use this for initialization
     void Start()
     {
-        NetworkingScript = GetComponent<NetworkMono>();
-
-        foreach (NetworkingPlayer player in Networking.Players.Values)
-            player.Entity = Networking.InitNewPlayerEntity();
+        foreach (NetworkingPlayer player in Players.Values)
+            player.Entity = InitNewPlayerEntity();
     }
 
     // Update is called once per frame
     void Update()
     {
-        if (Networking.Connected)
+        if (IsConnected)
         {
-            sinceServerUpdated += Time.deltaTime;
-            if (Networking.tcpSocket.Available > 0) //Recieve tcp client
+            LastServerUpdate += Time.deltaTime;
+            if (TcpSocket.Available > 0) //Recieve tcp client
             {
-                byte[] buffer = new byte[Networking.tcpSocket.Available];
-                Networking.tcpSocket.Receive(buffer);
-                NetworkMono.TcpIO.LRead(buffer);
+                byte[] buffer = new byte[TcpSocket.Available];
+                TcpSocket.Receive(buffer);
+                TcpIO.LRead(buffer);
                 ReadTcp();
+                LastServerUpdate = 0.0f;
             }
-            else if (sinceServerUpdated >= 1.0f)
+            else if (LastServerUpdate >= 1.0f)
             {
-                sinceServerUpdated = 0f;
+                LastServerUpdate = 0f;
                 try
                 {
-                    Networking.tcpSocket.Send(new byte[] { (byte)TCPMessageType.ServerPing });
+                    int sent = TcpSocket.Send(new byte[] { (byte)TCPMessageType.ServerPing });
+                    if (sent == 0) throw new SocketException();
                 }
                 catch (SocketException)
                 {
-                    Networking.Connected = false;
-                    NetworkingScript.popupPanel.ShowPanel("Disconnected from server", "Trying to reconnect in 3 secconds.", 2);
+                    IsConnected = false;
+                    _ = Networking.NetworkMono.popupPanel.ShowPanel("Disconnected from server", "Trying to reconnect in 3 secconds.", 2);
                 }
             }
         }
         else 
         {
-            tryConnectTimer += Time.deltaTime;
-            if(tryConnectTimer == 3.0f)
+            ReconnectTimer += Time.deltaTime;
+            if(ReconnectTimer == 3.0f)
             {
-                tryConnectTimer = 0.0f;
+                ReconnectTimer = 0.0f;
                 try
                 {
-                    Networking.Connect();
+                    Connect();
                 }
                 catch (SocketException)
                 {
-                    NetworkingScript.popupPanel.ShowPanel("Disconnected from server", "Trying to reconnect in 3 secconds.", 2.5f);
+                    Networking.NetworkMono.popupPanel.ShowPanel("Disconnected from server", "Trying to reconnect in 3 secconds.", 2.5f);
                 }
             }
         }
@@ -64,57 +66,64 @@ public class ClientNetworking : MonoBehaviour, INetworkingInterface
 
     public void ReadUdp(UDPMessageType type, int bufferLength, IPEndPoint RemoteEndPoint)
     {
-        sinceServerUpdated = 0f;
+        LastServerUpdate = 0f;
         if (type == UDPMessageType.UpdatePos)
         {
             int length = (bufferLength - 1) / 25;
             for (int i = 0; i < length; i++)
-                Networking.ReadPlayerPos();
+                UdpIO.ReadPlayerPos();
         }
     }
 
     public void ReadTcp()
     {
-        while(NetworkMono.TcpIO.ReadStream.Length != NetworkMono.TcpIO.ReadStream.Position)
+        while(TcpIO.ReadStream.Length != TcpIO.ReadStream.Position)
         {
-            TCPMessageType type = (TCPMessageType)NetworkMono.TcpIO.Reader.ReadByte();
-            if (type == TCPMessageType.PlayerConnect)
+            TCPMessageType MessageType = (TCPMessageType)TcpIO.Reader.ReadByte();
+            if (MessageType == TCPMessageType.PlayerConnect)
             {
-                byte playerId = NetworkMono.TcpIO.Reader.ReadByte();
-                string username = NetworkMono.TcpIO.Reader.ReadString();
-                Networking.Players.Add(playerId, new NetworkingPlayer()
+                byte playerId = TcpIO.Reader.ReadByte();
+                string username = TcpIO.Reader.ReadString();
+                Players.Add(playerId, new NetworkingPlayer()
                 {
-                    Entity = Networking.InitNewPlayerEntity(),
+                    Entity = InitNewPlayerEntity(playerId),
                     id = playerId,
                     username = username
                 });
             }
-            else if (type == TCPMessageType.SetPosition)
-                NetworkingScript.LocalPlayer.transform.position = NetworkMono.TcpIO.ReadVector3();
-            else if(type == TCPMessageType.PlayerShot)
+            else if (MessageType == TCPMessageType.SetPosition)
             {
-                byte id = NetworkMono.TcpIO.Reader.ReadByte();
-                Vector3 position = NetworkMono.TcpIO.ReadVector3();
-                Vector3 rotation = NetworkMono.TcpIO.ReadVector3();
-                NetworkingScript.SpawnBullet(position, rotation);
+                Networking.NetworkMono.LocalPlayer.transform.position = TcpIO.ReadVector3();
+                PlayerAlive = TcpIO.Reader.ReadBoolean();
             }
+            else if(MessageType == TCPMessageType.PlayerShot)
+                Networking.NetworkEvents.SpawnBullet(TcpIO.ReadProjectileInfo());
         }
-        NetworkMono.TcpIO.RDispose();
+        TcpIO.RDispose();
     }
 
     public void UpdatePosition()
     {
-        if (Networking.Connected) {
-            NetworkMono.UdpIO.Writer.Write((byte)UDPMessageType.UpdatePos);
-            NetworkMono.UdpIO.WriteTransform(Networking.playerId, NetworkingScript.LocalPlayer.transform.position, NetworkingScript.LocalPlayer.transform.eulerAngles);
-            byte[] buffer = NetworkMono.UdpIO.WriteStream.ToArray();
-            Networking.udpSocket.Send(buffer, buffer.Length, Networking.ServerEndPoint);
+        if (IsConnected) {
+            UdpIO.Writer.Write((byte)UDPMessageType.UpdatePos);
+            UdpIO.WriteTransform(LocalPlayerId, Networking.NetworkMono.LocalPlayer.transform.position, Networking.NetworkMono.LocalPlayer.transform.eulerAngles);
+            byte[] buffer = UdpIO.WriteStream.ToArray();
+            UdpSocket.Send(buffer, buffer.Length, ServerEndPoint);
         }
     }
 
     public void SendTcp(byte[] buffer)
     {
-        Networking.tcpSocket.Send(buffer);
-        Debug.Log("sent");
+        if(IsConnected)
+        {
+            try
+            {
+                TcpSocket.Send(buffer);
+            }
+            catch (SocketException)
+            {
+                IsConnected = false;
+            }
+        }
     }
 }

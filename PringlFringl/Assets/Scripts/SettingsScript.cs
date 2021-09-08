@@ -9,9 +9,9 @@ public class SettingsScript : MonoBehaviour
     public InputField NameField;
     void Start()
     {
-        NameField.text = Networking.PlayerName;
+        NameField.text = Networking.LocalPlayerName;
         CloseButton.onClick.AddListener(() => { gameObject.SetActive(false); });
-        NameField.onValueChanged.AddListener((string value) => { Networking.PlayerName = value; });
+        NameField.onValueChanged.AddListener((string value) => { Networking.LocalPlayerName = value; });
     }
 
     // Update is called once per frame
