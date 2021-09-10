@@ -14,7 +14,7 @@ public class ClientNetworking : MonoBehaviour, INetworkingInterface
     void Start()
     {
         foreach (NetworkingPlayer player in Players.Values)
-            player.Entity = InitNewPlayerEntity();
+            player.Entity =  Networking.NetworkMono.InitNewPlayerEntity(player.id, player.username);
     }
 
     // Update is called once per frame
@@ -41,8 +41,11 @@ public class ClientNetworking : MonoBehaviour, INetworkingInterface
                 }
                 catch (SocketException)
                 {
-                    IsConnected = false;
-                    _ = Networking.NetworkMono.popupPanel.ShowPanel("Disconnected from server", "Trying to reconnect in 3 secconds.", 2);
+                    if (!Connect())
+                    {
+                        IsConnected = false;
+                        _ = Networking.NetworkMono.popupPanel.ShowPanel("Disconnected from server", "Trying to reconnect in 3 secconds.", 2);
+                    }
                 }
             }
         }
@@ -52,14 +55,8 @@ public class ClientNetworking : MonoBehaviour, INetworkingInterface
             if(ReconnectTimer == 3.0f)
             {
                 ReconnectTimer = 0.0f;
-                try
-                {
-                    Connect();
-                }
-                catch (SocketException)
-                {
-                    Networking.NetworkMono.popupPanel.ShowPanel("Disconnected from server", "Trying to reconnect in 3 secconds.", 2.5f);
-                }
+                if(!Connect())
+                    Networking.NetworkMono.popupPanel.ShowPanel("Disconnected from server", "Trying to reconnect in 3 secconds.", 2);
             }
         }
     }
@@ -86,13 +83,14 @@ public class ClientNetworking : MonoBehaviour, INetworkingInterface
                 string username = TcpIO.Reader.ReadString();
                 Players.Add(playerId, new NetworkingPlayer()
                 {
-                    Entity = InitNewPlayerEntity(playerId),
+                    Entity = Networking.NetworkMono.InitNewPlayerEntity(playerId, username),
                     id = playerId,
                     username = username
                 });
             }
             else if (MessageType == TCPMessageType.SetPosition)
             {
+                Networking.NetworkMono.LocalPlayer.GetComponent<Rigidbody>().velocity = Vector3.zero;
                 Networking.NetworkMono.LocalPlayer.transform.position = TcpIO.ReadVector3();
                 PlayerAlive = TcpIO.Reader.ReadBoolean();
             }

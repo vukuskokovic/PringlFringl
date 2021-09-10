@@ -19,7 +19,6 @@ public static class Networking
     public static NetworkMono NetworkMono;
 
     public static byte LocalPlayerId;
-    public static string LocalPlayerName = "Name";
     public static bool PlayerAlive = false;
 
     public static bool IsHost = false;
@@ -30,41 +29,31 @@ public static class Networking
         foreach (IPAddress ip in Dns.GetHostEntry(Dns.GetHostName()).AddressList.Where(x => x.AddressFamily == AddressFamily.InterNetwork && x.ToString()[1] == '9'))
             return ip;
         
-        throw new Exception("Could not find local ipaddres probably not connected to internet or atleast lan");
+        throw new Exception("Not connected to any sort of network.");
     }
     public static byte[] EncodeString(string stringToEncode) => Encoding.ASCII.GetBytes(stringToEncode);
     public static string DecodeString(byte[] buffer, int received) => Encoding.ASCII.GetString(buffer, 0, received);
     public static byte[] EncodeJson<T>(T objectToEncode) => EncodeString(JsonConvert.SerializeObject(objectToEncode));
     public static T DecodeJson<T>(byte[] buffer, int received) => JsonConvert.DeserializeObject<T>(DecodeString(buffer, received));
-    public static GameObject InitNewPlayerEntity(byte id = 0)
+    public static bool Connect()
     {
-        GameObject obj = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-        obj.name = "Player " + id;
+        try
+        {
+            TcpSocket.Connect(ServerEndPoint);
+            TcpSocket.Send(EncodeString(Settings.Singleton.name));
+            TcpSocket.ReceiveTimeout = 500;
 
-        Rigidbody body = obj.AddComponent<Rigidbody>();
-        body.freezeRotation = true;
-        body.constraints = RigidbodyConstraints.FreezePosition;
-
-        if (IsHost)
-            obj.AddComponent<ServerPlayer>().SetId(id);
-        
-        return obj;
-    }
-    public static void Connect()
-    {
-        TcpSocket.Connect(ServerEndPoint);
-        TcpSocket.Send(EncodeString(LocalPlayerName));
-        TcpSocket.ReceiveTimeout = 500;
-
-        byte[] buffer = new byte[200];
-        int receveied = TcpSocket.Receive(buffer);
-        JoinResponse ServerResponse = DecodeJson<JoinResponse>(buffer, receveied);
-        foreach (var player in ServerResponse.Players)
-            Players.Add(player.id, player);
-        LocalPlayerId = ServerResponse.id;
-        UdpSocket.Send(new byte[] { 0, ServerResponse.id }, 2, ServerEndPoint);
-        IsHost = false;
-        IsConnected = true;
+            byte[] buffer = new byte[200];
+            int receveied = TcpSocket.Receive(buffer);
+            JoinResponse ServerResponse = DecodeJson<JoinResponse>(buffer, receveied);
+            foreach (var player in ServerResponse.Players)
+                Players.Add(player.id, player);
+            LocalPlayerId = ServerResponse.id;
+            UdpSocket.Send(new byte[] { 0, ServerResponse.id }, 2, ServerEndPoint);
+            IsHost = false;
+            IsConnected = true;
+            return true;
+        }catch{ return false; }
     }
 }
 

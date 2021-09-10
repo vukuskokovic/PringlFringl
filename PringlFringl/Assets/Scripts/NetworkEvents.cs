@@ -36,6 +36,7 @@ public class NetworkEvents : MonoBehaviour
         Vector3 newPosition = Networking.NetworkMono.Respawns[respawnIndex].position;
         if (playerId == 0)
         {
+            Networking.NetworkMono.LocalPlayer.GetComponent<Rigidbody>().velocity = Vector3.zero;
             Networking.NetworkMono.LocalPlayer.transform.position = newPosition;
             Networking.PlayerAlive = false;
         }
@@ -43,16 +44,9 @@ public class NetworkEvents : MonoBehaviour
         {
             Networking.NetworkMono.TcpIO.LWrite();
             Networking.NetworkMono.TcpIO.Writer.Write((byte)TCPMessageType.SetPosition);
-            Networking.NetworkMono.TcpIO.WriteVector3(newPosition);
-            Networking.NetworkMono.TcpIO.Writer.Write(false);
-            for(int i = 0; i < Networking.NetworkMono.PlayersCurrentFrame.Length; i++)
-            {
-                var player = Networking.NetworkMono.PlayersCurrentFrame[i];
-                if(player.ServerConnected && player.id == playerId)
-                {
-                    player.socket.Send(Networking.NetworkMono.TcpIO.WriteStream.ToArray());
-                }
-            }
+            Networking.NetworkMono.TcpIO.WriteVector3(newPosition); // New position
+            Networking.NetworkMono.TcpIO.Writer.Write(false); // Is alive
+            Networking.Players[playerId].socket.Send(Networking.NetworkMono.TcpIO.WriteStream.ToArray());
             Networking.NetworkMono.TcpIO.WDispose();
         }
         Networking.Players[playerId].Alive = false;

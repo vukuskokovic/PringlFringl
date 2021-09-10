@@ -53,6 +53,8 @@ MonoBehaviour:
   BulletColider: {fileID: 7541729553482855635}
   BulletSpeed: 15
   BulletDrop: 15
+  Range: 15
+  Force: 250
 --- !u!65 &7541729553482855635
 BoxCollider:
   m_ObjectHideFlags: 0

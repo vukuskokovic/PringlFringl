@@ -10,24 +10,30 @@ public class MainMenu : MonoBehaviour
     public Button QuitButton, CreateRoomButton, JoinButton;
     public GameObject JoinPanel, CreatePanel, SettingsPanel;
     public InputField IPField, PortField;
+    [HideInInspector]
     public PopupPanel popupPanel;
     public void ShowPanel(int index)
     {
         JoinPanel.SetActive(index == 0);
         CreatePanel.SetActive(index == 1);
-        SettingsPanel.SetActive(index == 2);
+        SettingsPanel.GetComponent<SettingsScript>().Holder.gameObject.SetActive(index == 2);
+        if (index == 2)
+            SettingsPanel.GetComponent<SettingsScript>().LoadSettings();
+        
         CreateRoomButton.onClick.AddListener(() => CreateRoom());
         JoinButton.onClick.AddListener(() => JoinRoom());
-        Screen.SetResolution(800, 600, false);
+        Screen.SetResolution(1280, 720, false);
     }
 
     private void Start()
     {
+        Settings.LoadSettings();
+        popupPanel = GetComponentInChildren<PopupPanel>();
         IPField.text = GetLocalIP().ToString() + ":1420";
         PortField.text = "1420";
         JoinPanel.SetActive(false);
         CreatePanel.SetActive(false);
-        SettingsPanel.SetActive(false);
+        SettingsPanel.GetComponent<SettingsScript>().Holder.gameObject.SetActive(false);
         QuitButton.onClick.AddListener(() => {
 #if UNITY_EDITOR
             UnityEditor.EditorApplication.isPlaying = false;
@@ -40,7 +46,7 @@ public class MainMenu : MonoBehaviour
 
     public int JoinRoom()
     {
-        if (LocalPlayerName == "") return 0;
+        if (Settings.Singleton.name == "") return 0;
         try
         {
             string[] split = IPField.text.Split(':');

@@ -968,6 +968,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   LocalPlayer: {fileID: 987565892}
   BulletPrefab: {fileID: 1423878892226291545, guid: 6b67dc2c6493885479f6081902e5dd85, type: 3}
+  PlayerPrefab: {fileID: 202001578434987173, guid: 4eaeb0ba39eb478459602a2d85eb87af, type: 3}
   PlayerSpawns:
   - {fileID: 2120094608}
   - {fileID: 1766816636}
@@ -2110,7 +2111,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   DirectionTransform: {fileID: 1416308706}
   JumpProgress: {fileID: 781995403}
-  networkMono: {fileID: 365179557}
   Sensitivity: 3
   Speed: 3
   JumpTimer: 1.2

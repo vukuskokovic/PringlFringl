@@ -4,18 +4,18 @@ using UnityEngine;
 
 public class ServerPlayer : MonoBehaviour
 {
-    private byte playerId;
+    public byte pId;
 
     public void SetId(byte id)
     {
-        playerId = id;
+        pId = id;
     }
+
     private void OnCollisionEnter(Collision collision)
     {
         if(collision.gameObject.tag == "Respawn")
         {
-            Debug.Log("Player " + playerId + " has died");
-            Networking.NetworkEvents.ServerPlayerDies(playerId);
+            Networking.NetworkEvents.ServerPlayerDies(pId);
         }
     }
 }

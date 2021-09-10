@@ -7,11 +7,13 @@ using System.Net.Sockets;
 using static Networking;
 using System.IO;
 using System.Threading.Tasks;
+using System.Collections.Generic;
 
 public class ServerNetworking : MonoBehaviour, INetworkingInterface
 {
     private readonly NetworkIO TcpIO = Networking.NetworkMono.TcpIO;
     private readonly NetworkIO UdpIO = Networking.NetworkMono.UdpIO;
+    List<int> usedSpawns = new List<int>();
     // Use this for initialization
     void Start()
     {
@@ -22,7 +24,7 @@ public class ServerNetworking : MonoBehaviour, INetworkingInterface
             username = "Host",
             ServerConnected = true
         });
-        Networking.NetworkMono.LocalPlayer.AddComponent<ServerPlayer>();
+        Networking.NetworkMono.LocalPlayer.AddComponent<ServerPlayer>().SetId(0);
         TcpSocket.BeginAccept(new AsyncCallback(TCPEndAccept), null);
         Networking.PlayerAlive = true;
         SpawnPlayer(Players[0]);
@@ -89,6 +91,7 @@ public class ServerNetworking : MonoBehaviour, INetworkingInterface
         if (allDead)
         {
             Debug.Log("Starting the round");
+            usedSpawns.Clear();
             for(int i = 0; i < Networking.NetworkMono.PlayersCurrentFrame.Length; i++)
             {
                 var player = Networking.NetworkMono.PlayersCurrentFrame[i];
@@ -157,12 +160,12 @@ public class ServerNetworking : MonoBehaviour, INetworkingInterface
                 socket = socket,
                 ServerConnected = true
             };
-            Debug.Log("Player connected " + player.username + " id: " + player.id);
+            Debug.Log("Player connected " + ((IPEndPoint)socket.RemoteEndPoint).Port);
             NetworkMono.MainThreadInvokes.Enqueue(() =>
             {
                 try
                 {
-                    player.Entity = InitNewPlayerEntity(player.id);
+                    player.Entity = Networking.NetworkMono.InitNewPlayerEntity(player.id, player.username);
                     SpawnPlayer(player);
                 }
                 catch (Exception ex)
@@ -220,7 +223,12 @@ public class ServerNetworking : MonoBehaviour, INetworkingInterface
 
     void SpawnPlayer(NetworkingPlayer player) // Server
     {
-        int spawnId = new System.Random().Next(0, Networking.NetworkMono.PlayerSpawns.Count);
+        System.Random r = new System.Random();
+        int spawnId = r.Next(0, Networking.NetworkMono.PlayerSpawns.Count);
+        while(usedSpawns.Contains(spawnId)){
+            spawnId = r.Next(0, Networking.NetworkMono.PlayerSpawns.Count);
+        }
+        usedSpawns.Add(spawnId);
         Transform spawnPoint = Networking.NetworkMono.PlayerSpawns[spawnId];
         if (player.id != 0)
         {

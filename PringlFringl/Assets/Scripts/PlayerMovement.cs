@@ -24,7 +24,7 @@ public class PlayerMovement : MonoBehaviour
     void Update()
     {
         if (shootTimer != 0) shootTimer += Time.deltaTime;
-        if(shootTimer >= 0.5)
+        if(shootTimer >= 1)
             shootTimer = 0f;
         
         if (jumpElapsed > 0) jumpElapsed -= Time.deltaTime;

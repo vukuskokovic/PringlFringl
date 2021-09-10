@@ -4,12 +4,13 @@ using UnityEngine;
 
 public class BulletScript : MonoBehaviour
 {
-    bool ParamsSet = false;
-
     public Collider BulletColider;
     public float BulletSpeed;
     public float BulletDrop;
+    public float Range;
+    public float Force;
     private GameObject entity;
+    private bool ParamsSet = false;
     public void SetParams(ProjectileInfo info)
     {
         transform.position = info.origin;
@@ -27,12 +28,23 @@ public class BulletScript : MonoBehaviour
         if (ParamsSet)
         {
             transform.position += transform.up * Time.deltaTime * BulletSpeed;
+            //transform.Rotate(Vector3.up * Time.deltaTime * BulletSpeed * 10);
+            transform.Rotate(Vector3.right * Time.deltaTime * BulletDrop);
         }
     }
     private void OnCollisionEnter(Collision collision)
     {
         if (Networking.PlayerAlive)
-            Networking.NetworkMono.LocalPlayer.GetComponent<Rigidbody>().AddExplosionForce(250, collision.transform.position, 10);
+        {
+            float distance = Vector3.Distance(collision.contacts[0].point, Networking.NetworkMono.LocalPlayer.transform.position);
+            if(distance < Range)
+            {
+                float amplifier = (1 - (distance / Range)) * Force;
+                Vector3 forceFrom = Networking.NetworkMono.LocalPlayer.transform.position - collision.contacts[0].point;
+                forceFrom.Normalize();
+                Networking.NetworkMono.LocalPlayer.GetComponent<Rigidbody>().AddForce(forceFrom * amplifier);
+            }
+        }
         
         Destroy(gameObject);
     }

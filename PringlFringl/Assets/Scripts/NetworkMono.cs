@@ -11,7 +11,7 @@ using static Networking;
 public class NetworkMono : MonoBehaviour
 {
     // Public variables
-    public GameObject LocalPlayer, BulletPrefab;
+    public GameObject LocalPlayer, BulletPrefab, PlayerPrefab;
     public List<Transform> PlayerSpawns;
     public List<Transform> Respawns;
     public PopupPanel popupPanel;
@@ -89,5 +89,17 @@ public class NetworkMono : MonoBehaviour
                 else Debug.LogError(ex.ErrorCode);
             }
         }
+    }
+
+    public GameObject InitNewPlayerEntity(byte playerid, string username)
+    {
+        GameObject obj = Instantiate(PlayerPrefab);
+        obj.name = "Player " + playerid;
+        obj.GetComponentInChildren<TextMesh>().text = username;
+        if (IsHost)
+            obj.AddComponent<ServerPlayer>().SetId(playerid);
+        
+
+        return obj;
     }
 }
