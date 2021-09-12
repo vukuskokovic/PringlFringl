@@ -14,6 +14,8 @@ public class ServerNetworking : MonoBehaviour, INetworkingInterface
     private readonly NetworkIO TcpIO = Networking.NetworkMono.TcpIO;
     private readonly NetworkIO UdpIO = Networking.NetworkMono.UdpIO;
     List<int> usedSpawns = new List<int>();
+    bool roundStarting = false;
+    float roundTimer = 0.0f;
     // Use this for initialization
     void Start()
     {
@@ -34,11 +36,11 @@ public class ServerNetworking : MonoBehaviour, INetworkingInterface
     void Update()
     {
         var currentPlayers = Networking.NetworkMono.PlayersCurrentFrame;
-        bool allDead = true;
+        List<NetworkingPlayer> alivePlayers = new List<NetworkingPlayer>();
         for (int i = 0; i < currentPlayers.Length; i++)
         {
             var player = currentPlayers[i];
-            if (player.Alive) allDead = false;
+            if (player.Alive) alivePlayers.Add(player);
             if (player.id == 0) continue;
 
             else if (player.ServerConnected)
@@ -88,16 +90,40 @@ public class ServerNetworking : MonoBehaviour, INetworkingInterface
                 }
             }
         }
-        if (allDead)
+        if (alivePlayers.Count <= 1 && !roundStarting && Networking.Players.Count != 1)
         {
-            Debug.Log("Starting the round");
-            usedSpawns.Clear();
-            for(int i = 0; i < Networking.NetworkMono.PlayersCurrentFrame.Length; i++)
-            {
-                var player = Networking.NetworkMono.PlayersCurrentFrame[i];
-                SpawnPlayer(player);
-            }
+            if (alivePlayers.Count == 1)
+                Networking.NetworkEvents.ServerPlayerDies(alivePlayers[0].id);
+
+            TcpIO.LWrite();
+            TcpIO.Writer.Write((byte)TCPMessageType.RoundEnd);
+            TcpIO.Writer.Write(alivePlayers.Count == 1);//Is there a winner
+            TcpIO.Writer.Write(alivePlayers.Count == 1 ? alivePlayers[0].id : (byte)0);//Winners id 0 if none
+            TcpIO.Writer.Write(3.0f);//New round starts in
+            SendTcp(TcpIO.WriteStream.ToArray());
+            TcpIO.WDispose();
+
+            roundStarting = true;
+            roundTimer += Time.deltaTime;
         }
+        else if (roundStarting)
+        {
+            roundTimer += Time.deltaTime;
+            if(roundTimer >= 3.0f)
+                StartNewRound();
+        }
+    }
+
+    void StartNewRound()
+    {
+        usedSpawns.Clear();
+        for (int i = 0; i < Networking.NetworkMono.PlayersCurrentFrame.Length; i++)
+        {
+            var player = Networking.NetworkMono.PlayersCurrentFrame[i];
+            SpawnPlayer(player);
+        }
+        roundTimer = 0.0f;
+        roundStarting = false;
     }
 
     void ReadTcp()
@@ -166,7 +192,7 @@ public class ServerNetworking : MonoBehaviour, INetworkingInterface
                 try
                 {
                     player.Entity = Networking.NetworkMono.InitNewPlayerEntity(player.id, player.username);
-                    SpawnPlayer(player);
+                    SetPlayerPosition(player, Networking.NetworkMono.Respawns[0].position, false);
                 }
                 catch (Exception ex)
                 {
@@ -199,7 +225,10 @@ public class ServerNetworking : MonoBehaviour, INetworkingInterface
         NetworkingPlayer[] players = Players.Values.ToArray();
         for (int i = 0; i < players.Length; i++)
             if (players[i].ServerConnected)
-                UdpIO.WriteTransform(players[i].id, players[i].Entity.transform.position, players[i].Entity.transform.eulerAngles);
+            {
+                UdpIO.WriteTransform(players[i].id, players[i].Entity.transform.position, players[i].Entity.transform.eulerAngles);//Transform
+                UdpIO.Writer.Write(players[i].Alive);// Is player alive
+            }
 
         byte[] buffer = UdpIO.WriteStream.ToArray();
         for (int i = 0; i < players.Length; i++)
@@ -231,14 +260,8 @@ public class ServerNetworking : MonoBehaviour, INetworkingInterface
         usedSpawns.Add(spawnId);
         Transform spawnPoint = Networking.NetworkMono.PlayerSpawns[spawnId];
         if (player.id != 0)
-        {
-            TcpIO.LWrite();
-            TcpIO.Writer.Write((byte)TCPMessageType.SetPosition);
-            TcpIO.WriteVector3(spawnPoint.position);
-            TcpIO.Writer.Write(true);
-            player.socket.Send(TcpIO.WriteStream.ToArray());
-            TcpIO.WDispose();
-        }
+            SetPlayerPosition(player, spawnPoint.position, true);
+        
         else
         {
             Networking.NetworkMono.LocalPlayer.transform.position = spawnPoint.position;
@@ -246,6 +269,16 @@ public class ServerNetworking : MonoBehaviour, INetworkingInterface
         }
 
         player.Alive = true;
+    }
+
+    void SetPlayerPosition(NetworkingPlayer player, Vector3 position, bool alive = false)
+    {
+        TcpIO.LWrite();
+        TcpIO.Writer.Write((byte)TCPMessageType.SetPosition);
+        TcpIO.WriteVector3(position);
+        TcpIO.Writer.Write(alive);
+        player.socket.Send(TcpIO.WriteStream.ToArray());
+        TcpIO.WDispose();
     }
 
     public void SendTcp(byte[] buffer)

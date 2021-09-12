@@ -68,7 +68,7 @@ public class ClientNetworking : MonoBehaviour, INetworkingInterface
         {
             int length = (bufferLength - 1) / 25;
             for (int i = 0; i < length; i++)
-                UdpIO.ReadPlayerPos();
+                UdpIO.ReadPlayerPos(readAlive: true);
         }
     }
 
@@ -94,8 +94,15 @@ public class ClientNetworking : MonoBehaviour, INetworkingInterface
                 Networking.NetworkMono.LocalPlayer.transform.position = TcpIO.ReadVector3();
                 PlayerAlive = TcpIO.Reader.ReadBoolean();
             }
-            else if(MessageType == TCPMessageType.PlayerShot)
+            else if (MessageType == TCPMessageType.PlayerShot)
                 Networking.NetworkEvents.SpawnBullet(TcpIO.ReadProjectileInfo());
+            else if (MessageType == TCPMessageType.RoundEnd)
+            {
+                bool winner = TcpIO.Reader.ReadBoolean();
+                byte winnerId = TcpIO.Reader.ReadByte();
+                float newRoundStartsIn = TcpIO.Reader.ReadSingle();
+                Networking.NetworkMono.popupPanel.ShowPanel("Round end", winner ? "Winner is " + Networking.Players[winnerId].username +"\nRound starts in" + newRoundStartsIn: "Nobody won round starts in:" + newRoundStartsIn, newRoundStartsIn);
+            }
         }
         TcpIO.RDispose();
     }

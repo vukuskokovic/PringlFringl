@@ -8,14 +8,18 @@ using System.Linq;
 using UnityEngine;
 using System.Collections.Generic;
 using static Networking;
+using UnityEngine.UI;
+
 public class NetworkMono : MonoBehaviour
 {
     // Public variables
-    public GameObject LocalPlayer, BulletPrefab, PlayerPrefab;
+    public GameObject LocalPlayer, BulletPrefab, PlayerPrefab, PlayerAlivePanel, TextPrefab;
     public List<Transform> PlayerSpawns;
     public List<Transform> Respawns;
     public PopupPanel popupPanel;
     public int Ticks;
+    Dictionary<byte, Text> PlayerAliveTexts = new Dictionary<byte, Text>();
+
 
     [HideInInspector]
     public NetworkingPlayer[] PlayersCurrentFrame;
@@ -58,6 +62,21 @@ public class NetworkMono : MonoBehaviour
         while (MainThreadInvokes.Count > 0) MainThreadInvokes.Dequeue()();
         // End recieve tcp client
 
+        for (int i = 0; i < PlayersCurrentFrame.Length; i++)
+        {
+            if (!PlayerAliveTexts.ContainsKey(PlayersCurrentFrame[i].id))
+            {
+                GameObject obj = Instantiate(TextPrefab);
+                obj.SetActive(true);
+                obj.transform.SetParent(PlayerAlivePanel.transform);
+                Text textComponent = obj.GetComponent<Text>();
+                textComponent.text = PlayersCurrentFrame[i].username;
+                PlayerAliveTexts.Add(PlayersCurrentFrame[i].id, textComponent);
+                SetPlayerAliveText(PlayersCurrentFrame[i].id);
+            }
+            else SetPlayerAliveText(PlayersCurrentFrame[i].id);
+        }
+        PlayerAlivePanel.GetComponent<RectTransform>().position = new Vector3(Screen.width, Screen.height);
         UpdateTimer += Time.deltaTime;
         if (UpdateTimer >= 1.0f / Ticks) // Update position for client, for server update all clients with positions
         {
@@ -66,6 +85,12 @@ public class NetworkMono : MonoBehaviour
             NetworkingInterface.UpdatePosition();
             UdpIO.WDispose();
         }
+    }
+
+    void SetPlayerAliveText(byte playerid)
+    {
+        Text text = PlayerAliveTexts[playerid];
+        text.color = Networking.Players[playerid].Alive ? Color.green : Color.red;
     }
 
     void UDPThread()

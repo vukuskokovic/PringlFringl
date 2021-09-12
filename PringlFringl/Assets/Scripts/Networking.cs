@@ -96,7 +96,8 @@ public enum TCPMessageType : byte
     PlayerShot = 2,
     ServerPing = 3,
     PlayerDisconnect = 4,
-    PlayerDied = 5
+    PlayerDied = 5,
+    RoundEnd = 6
 }
 
 public class NetworkIO
@@ -167,12 +168,20 @@ public class NetworkIO
     }
     public Vector3 ReadVector3() => new Vector3(Reader.ReadSingle(), Reader.ReadSingle(), Reader.ReadSingle());
 
-    public void ReadPlayerPos()
+    public void ReadPlayerPos(bool readAlive = false)
     {
         byte playerId = Reader.ReadByte();
         Vector3 pos = ReadVector3();
         Vector3 rot = ReadVector3();
-        if (playerId == Networking.LocalPlayerId) return;
+        bool isAlive = false;
+        if (readAlive)
+            isAlive = Reader.ReadBoolean();
+        
+        if (playerId == Networking.LocalPlayerId && !Networking.IsHost)
+        {
+            Networking.PlayerAlive = isAlive;
+            return;
+        }
         NetworkingPlayer player = Networking.Players[playerId];
         player.SinceLastUpdate = 0f;
         NetworkMono.MainThreadInvokes.Enqueue(() =>

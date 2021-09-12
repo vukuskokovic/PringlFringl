@@ -13,9 +13,7 @@ public class ServerPlayer : MonoBehaviour
 
     private void OnCollisionEnter(Collision collision)
     {
-        if(collision.gameObject.tag == "Respawn")
-        {
+        if (collision.gameObject.tag == "Respawn")
             Networking.NetworkEvents.ServerPlayerDies(pId);
-        }
     }
 }
